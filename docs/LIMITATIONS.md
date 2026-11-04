@@ -1,6 +1,6 @@
 # Limitations connues
 
-État de la version 0.3.0. Chaque limitation indique son impact sur ce que le
+État de la version 0.4.0. Chaque limitation indique son impact sur ce que le
 sniffer affiche.
 
 ## Réassemblage TCP
@@ -16,7 +16,9 @@ sniffer affiche.
 
 | Limitation | Impact |
 |---|---|
-| **Checksums IP et TCP non vérifiés** | Choix lié à l'offload, qui rend faux les checksums des paquets émis par la machine de capture. Conséquences : une trame corrompue n'est pas détectée, et un segment au checksum volontairement invalide, rejeté par le système de la machine destinataire, est quand même affiché et décodé (attaque par *insertion*, voir le glossaire). |
+| **Checksums non vérifiés dans certains contextes** | La vérification dépend de la source (`--checksums auto`) : elle est désactivée sur l'interface loopback, où le checksum TCP n'est jamais calculé, et pour un fichier lu avec `--read` sans `--local-ip`. Dans ces cas, un segment au checksum invalide est analysé (attaque par *insertion*, voir le glossaire). |
+| **D'autres formes d'insertion restent possibles** | Seul le checksum est vérifié. La machine destinataire peut aussi rejeter un segment pour d'autres raisons (numéro de séquence hors de sa fenêtre de réception, horodatage refusé par PAWS...), que le sniffer ne reproduit pas. |
+| **Pseudo-en-tête IPv6 et en-tête de routage** | Le checksum TCP sur IPv6 est calculé avec l'adresse de destination de l'en-tête IPv6 ; en présence d'un en-tête de routage, la RFC 8200 impose l'adresse de destination finale. Un tel segment serait jugé invalide à tort. |
 | **Fragments IP non réassemblés** | Un datagramme IP fragmenté n'est pas recomposé : son contenu TCP n'est pas lu correctement. Les messages MQTT courts ne sont normalement jamais fragmentés. |
 | **Lecture de fichiers testée avec le format pcap classique** | L'option `--read` a été testée avec des fichiers pcap (ceux de `tcpdump -w` et ceux de `examples/scenarios.rs`), pas avec le format pcapng que Wireshark utilise par défaut. |
 | **Seul MQTT 3.1.1 est supporté** | Un client MQTT 3.1 ou 5 provoque l'erreur `UnsupportedProtocolLevel`. |
@@ -46,3 +48,12 @@ sniffer affiche.
   message était signalé incomplet et la suite produisait une fausse anomalie.
   Corrigé par le réassemblage TCP (`tcp`) et le décodage par flux
   (`mqtt::StreamDecoder`).
+- **Analyse de segments au checksum invalide (insertion).** Un segment forgé
+  au checksum invalide, rejeté par la machine destinataire, était analysé :
+  le sniffer pouvait afficher un faux message à la place du vrai. Corrigé par
+  la vérification des checksums (`checksum`, `analyzer::ChecksumPolicy`) ;
+  démontré par le scénario `insertion-checksum`, rejoué avec et sans
+  vérification.
+- **Panique sur un tube fermé.** `mqtt-sniffer ... | head` provoquait une
+  panique (« Broken pipe ») quand `head` avait fini de lire. Le sniffer
+  s'arrête désormais sans erreur.

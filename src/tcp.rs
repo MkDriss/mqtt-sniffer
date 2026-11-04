@@ -387,6 +387,7 @@ mod tests {
                 psh: !payload.is_empty(),
             },
             payload,
+            checksums_valid: true,
         }
     }
 

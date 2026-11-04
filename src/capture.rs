@@ -62,3 +62,9 @@ pub fn timestamp(header: &PacketHeader) -> Duration {
 pub fn list_interfaces() -> Result<Vec<Device>, pcap::Error> {
     Device::list()
 }
+
+/// L'interface nommée `name`, avec ses adresses et ses propriétés
+/// (par exemple `flags.is_loopback()`), si elle existe.
+pub fn find_interface(name: &str) -> Result<Option<Device>, pcap::Error> {
+    Ok(Device::list()?.into_iter().find(|dev| dev.name == name))
+}

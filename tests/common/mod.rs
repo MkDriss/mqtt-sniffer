@@ -65,6 +65,11 @@ pub const PUBLISH: [u8; 17] = [
     0x30, 0x0f, 0x00, 0x09, b'l', b'a', b'b', b'o', b'/', b't', b'e', b'm', b'p', b'2', b'1', b'.',
     b'5',
 ];
+/// Faux PUBLISH de même taille : `labo/temp` = `99.9`.
+pub const PUBLISH_FORGE: [u8; 17] = [
+    0x30, 0x0f, 0x00, 0x09, b'l', b'a', b'b', b'o', b'/', b't', b'e', b'm', b'p', b'9', b'9', b'.',
+    b'9',
+];
 pub const PINGREQ: [u8; 2] = [0xc0, 0x00];
 pub const DISCONNECT: [u8; 2] = [0xe0, 0x00];
 /// SUBSCRIBE dont les flags valent 0000 au lieu de 0010 (paquet malformé).
@@ -160,6 +165,12 @@ impl Conversation {
         frame
     }
 
+    /// Segment du client au numéro de séquence attendu, SANS avancer ce
+    /// numéro : un segment forgé, que le vrai segment suivra.
+    pub fn forged_client_segment(&self, payload: &[u8]) -> Vec<u8> {
+        self.build(true, self.client_seq, Flags::default(), payload)
+    }
+
     /// Le client envoie des données.
     pub fn client_sends(&mut self, payload: &[u8]) {
         let frame = self.client_segment(payload);
@@ -225,6 +236,13 @@ impl Conversation {
     pub fn into_frames(self) -> Vec<(Duration, Vec<u8>)> {
         self.frames
     }
+}
+
+/// Altère le checksum TCP d'une trame Ethernet → IPv4 (sans options) → TCP.
+/// Le checksum TCP occupe les octets 16 et 17 de l'en-tête TCP.
+pub fn corrupt_tcp_checksum(frame: &mut [u8]) {
+    const TCP_CHECKSUM: usize = 14 + 20 + 16; // Ethernet + IPv4 + position dans TCP
+    frame[TCP_CHECKSUM] ^= 0xff;
 }
 
 // ===========================================================================
@@ -318,6 +336,19 @@ pub fn scenarios() -> Vec<Scenario> {
                 let mut c = Conversation::new();
                 c.mqtt_session();
                 c.client_sends(&PUBLISH_TOPIC_PIEGE);
+                c.into_frames()
+            },
+        },
+        Scenario {
+            name: "insertion-checksum",
+            description: "un faux PUBLISH au checksum invalide, puis le vrai au même numéro",
+            frames: {
+                let mut c = Conversation::new();
+                c.mqtt_session();
+                let mut forge = c.forged_client_segment(&PUBLISH_FORGE);
+                corrupt_tcp_checksum(&mut forge);
+                c.push(forge);
+                c.client_sends(&PUBLISH);
                 c.into_frames()
             },
         },

@@ -7,6 +7,7 @@
 //! Modules, de la capture à l'interprétation :
 //! - [`capture`] : ouverture d'une capture libpcap ;
 //! - [`parser`] : découpage d'une trame Ethernet → IP → TCP ;
+//! - [`checksum`] : vérification des checksums IPv4 et TCP ;
 //! - [`tcp`] : réassemblage des flux TCP ;
 //! - [`mqtt`] : décodage des messages MQTT 3.1.1 ;
 //! - [`analyzer`] : relie réassemblage et décodage, et signale tout ce qui est
@@ -14,6 +15,7 @@
 
 pub mod analyzer;
 pub mod capture;
+pub mod checksum;
 pub mod mqtt;
 pub mod parser;
 pub mod tcp;

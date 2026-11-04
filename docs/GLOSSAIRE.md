@@ -250,6 +250,17 @@ car le TTL change [RFC791]. IPv6 n'en a pas [BORTZ-1071].
 **Pseudo-en-tête** — Champs ajoutés pour le calcul du checksum TCP mais non
 transmis : adresses source et destination, protocole, longueur TCP [RFC9293].
 
+**Pseudo-en-tête IPv6** — Version IPv6 du pseudo-en-tête TCP : adresses de
+128 bits, longueur sur 32 bits, puis le numéro du protocole ; avec un en-tête
+de routage, c'est l'adresse de destination finale qui est utilisée
+[RFC8200, §8.1].
+
+**Politique de vérification des checksums** — Choix des segments qui doivent
+avoir des checksums corrects pour être analysés : aucun, tous, ou seulement
+ceux reçus par la machine de capture, dont les paquets émis ont des checksums
+faussés par l'offload (`analyzer::ChecksumPolicy`). *(explication
+personnelle)*
+
 **Offload du checksum** — Délégation du calcul des checksums à la carte
 réseau. Les paquets *émis* par la machine qui capture sont vus avant ce
 calcul et portent seulement la somme du pseudo-en-tête [WS-OFFLOAD]. Le
@@ -450,6 +461,18 @@ le code partagé entre tests va dans `tests/common/mod.rs` [RUST-BOOK, ch. 11.3]
 (perte, désordre, RST forgé...), rejouable avec `--read`
 (`tests/common/mod.rs`). *(explication personnelle)*
 
+**`Box<dyn Error>`** — Type qui peut contenir n'importe quelle erreur ;
+l'opérateur `?` y convertit automatiquement une `pcap::Error` comme une
+`io::Error`. *(explication personnelle)*
+
+**Tube fermé (broken pipe)** — Erreur reçue en écrivant dans un tube dont le
+lecteur s'est arrêté (`mqtt-sniffer ... | head`) ; le sniffer la traite comme
+une fin normale. *(explication personnelle)*
+
+**Version minimale de Rust (MSRV)** — Plus ancienne version du compilateur
+capable de compiler le projet, déclarée par `rust-version` dans
+`Cargo.toml` (1.88 ici). *(explication personnelle)*
+
 **Test unitaire** — Fonction `#[test]` placée dans un module `#[cfg(test)]`
 du même fichier, compilée seulement par `cargo test` [RUST-BOOK, ch. 11.3].
 
@@ -547,6 +570,7 @@ libpcap avec la précision de la microseconde [PCAP-RS].
 - **[RFC791]** J. Postel, RFC 791, *Internet Protocol*, 1981. https://www.rfc-editor.org/rfc/rfc791
 - **[RFC1071]** R. Braden, D. Borman, C. Partridge, RFC 1071, *Computing the Internet Checksum*, 1988. https://www.rfc-editor.org/rfc/rfc1071
 - **[RFC7323]** D. Borman et al., RFC 7323, *TCP Extensions for High Performance*, 2014. https://www.rfc-editor.org/rfc/rfc7323
+- **[RFC8200]** S. Deering, R. Hinden, RFC 8200, *Internet Protocol, Version 6 (IPv6) Specification*, 2017. https://www.rfc-editor.org/rfc/rfc8200
 - **[RFC9293]** W. Eddy (éd.), RFC 9293, *Transmission Control Protocol (TCP)*, 2022. https://www.rfc-editor.org/rfc/rfc9293
 - **[RUST-BOOK]** S. Klabnik, C. Nichols, *The Rust Programming Language*. https://doc.rust-lang.org/book/
 - **[RUST-BY-EXAMPLE]** *Rust by Example*, « let-else ». https://doc.rust-lang.org/stable/rust-by-example/flow_control/let_else.html

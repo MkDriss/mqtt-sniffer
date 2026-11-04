@@ -6,12 +6,17 @@ mod common;
 
 use std::path::PathBuf;
 
-use mqtt_sniffer::analyzer::{Analyzer, Config};
+use mqtt_sniffer::analyzer::{Analyzer, ChecksumPolicy, Config};
 use mqtt_sniffer::{capture, parser};
 
 /// Écrit le scénario `name` dans un fichier pcap temporaire, le relit avec
 /// `capture::open_offline` et renvoie la description de chaque événement.
+/// Les scénarios ont des checksums corrects : on les vérifie tous.
 fn rejouer(name: &str) -> Vec<String> {
+    rejouer_avec(name, ChecksumPolicy::All)
+}
+
+fn rejouer_avec(name: &str, checksums: ChecksumPolicy) -> Vec<String> {
     let scenario = common::scenarios()
         .into_iter()
         .find(|s| s.name == name)
@@ -21,7 +26,10 @@ fn rejouer(name: &str) -> Vec<String> {
     common::write_pcap(&path, &scenario.frames).expect("écriture du pcap");
 
     let mut cap = capture::open_offline(&path, "tcp port 1883").expect("lecture du pcap");
-    let mut analyzer = Analyzer::new(Config::default());
+    let mut analyzer = Analyzer::new(Config {
+        checksums,
+        ..Config::default()
+    });
     let mut lignes = Vec::new();
     loop {
         match cap.next_packet() {
@@ -132,6 +140,36 @@ fn topic_piege_neutralise() {
     assert!(!lignes.iter().any(|l| l.contains('\u{1b}')));
 }
 
+const PUBLISH_FORGE: &str =
+    "MQTT PUBLISH topic=\"labo/temp\" qos=0 retain=0 dup=0 id=- payload=\"99.9\"";
+
+#[test]
+fn insertion_dejouee_par_la_verification_des_checksums() {
+    let lignes = rejouer_avec("insertion-checksum", ChecksumPolicy::All);
+    assert_eq!(
+        lignes[lignes.len() - 2..],
+        [
+            "[!] segment au checksum invalide ignoré (la destination le rejette aussi)",
+            PUBLISH_DECODE,
+        ]
+    );
+    assert!(!lignes.iter().any(|l| l == PUBLISH_FORGE));
+}
+
+#[test]
+fn sans_verification_l_insertion_reussit() {
+    // Ce que verrait un outil qui ne vérifie pas : le FAUX message, alors que
+    // le broker, lui, a rejeté le faux et reçu le vrai.
+    let lignes = rejouer_avec("insertion-checksum", ChecksumPolicy::Off);
+    assert_eq!(
+        lignes[lignes.len() - 2..],
+        [
+            PUBLISH_FORGE,
+            "[!] 17 octet(s) ignorés : déjà reçus, ou arrivés après un trou",
+        ]
+    );
+}
+
 #[test]
 fn connexion_deja_ouverte_sans_fausse_anomalie() {
     assert_eq!(
@@ -161,6 +199,7 @@ fn chaque_scenario_est_teste() {
             "anomalie",
             "rst-forge",
             "topic-piege",
+            "insertion-checksum",
             "connexion-deja-ouverte",
         ]
     );

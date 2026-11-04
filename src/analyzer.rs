@@ -12,6 +12,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use crate::mqtt::{MemoryBudget, MqttError, Packet, StreamConfig, StreamDecoder, StreamEvent};
@@ -22,8 +23,41 @@ use crate::tcp::{self, CloseReason, FlowKey, Reassembler, TcpEvent};
 // Configuration
 // ===========================================================================
 
+/// Quels segments doivent avoir des checksums corrects pour être analysés.
+///
+/// Un segment au checksum invalide est rejeté par la machine destinataire.
+/// L'analyser quand même ouvrirait la porte à une attaque par *insertion* :
+/// l'outil verrait un contenu que la destination n'a jamais reçu.
+///
+/// Mais les paquets ÉMIS par la machine de capture ont souvent des checksums
+/// faux (offload), et l'interface loopback ne calcule jamais le checksum TCP :
+/// il faut donc choisir la politique selon le contexte.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum ChecksumPolicy {
+    /// Aucune vérification (interface loopback, capture d'origine inconnue).
+    #[default]
+    Off,
+    /// Tous les segments sont vérifiés (capture faite par une machine tierce,
+    /// fichiers aux checksums corrects).
+    All,
+    /// Seuls les segments reçus par l'une de ces adresses sont vérifiés : ceux
+    /// qu'elles émettent ont des checksums faussés par l'offload.
+    ReceivedBy(Vec<IpAddr>),
+}
+
+impl ChecksumPolicy {
+    /// Ce segment doit-il avoir des checksums corrects ?
+    pub fn applies_to(&self, segment: &TcpSegment<'_>) -> bool {
+        match self {
+            ChecksumPolicy::Off => false,
+            ChecksumPolicy::All => true,
+            ChecksumPolicy::ReceivedBy(local) => local.contains(&segment.dst_ip),
+        }
+    }
+}
+
 /// Réglages de l'analyse. `Config::default()` convient à un broker MQTT local.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     /// Port TCP sur lequel le trafic est décodé comme du MQTT.
     pub mqtt_port: u16,
@@ -33,6 +67,8 @@ pub struct Config {
     pub stream: StreamConfig,
     /// Mémoire totale, en octets, pour les messages MQTT incomplets.
     pub memory_budget: usize,
+    /// Vérification des checksums (désactivée par défaut).
+    pub checksums: ChecksumPolicy,
 }
 
 impl Default for Config {
@@ -42,6 +78,7 @@ impl Default for Config {
             tcp: tcp::Config::default(),
             stream: StreamConfig::default(),
             memory_budget: MemoryBudget::default().limit(),
+            checksums: ChecksumPolicy::default(),
         }
     }
 }
@@ -77,6 +114,8 @@ pub enum Event<'a> {
     IgnoredSyn { flow: FlowKey },
     /// Nombre maximal de flux atteint : ce flux n'est pas suivi.
     FlowLimitReached { flow: FlowKey },
+    /// Segment au checksum invalide, ignoré : la destination le rejette aussi.
+    InvalidChecksum { flow: FlowKey },
 
     // --- Couche MQTT ---
     /// Un message MQTT complet.
@@ -103,6 +142,7 @@ impl Event<'_> {
             | IgnoredReset { flow }
             | IgnoredSyn { flow }
             | FlowLimitReached { flow }
+            | InvalidChecksum { flow }
             | Mqtt { flow, .. }
             | MqttAnomaly { flow, .. }
             | Resynchronized { flow, .. }
@@ -148,6 +188,10 @@ impl Event<'_> {
             }
             IgnoredSyn { .. } => "[!] SYN ignoré (flux déjà ouvert)".to_string(),
             FlowLimitReached { .. } => "[!] flux non suivi : nombre maximal atteint".to_string(),
+            InvalidChecksum { .. } => {
+                "[!] segment au checksum invalide ignoré (la destination le rejette aussi)"
+                    .to_string()
+            }
             Mqtt { packet, .. } => format!("MQTT {}", packet.describe(show_secrets)),
             MqttAnomaly { error, .. } => {
                 format!("[ANOMALIE] {error} (suite du flux ignorée)")
@@ -182,10 +226,10 @@ pub struct Analyzer {
 impl Analyzer {
     pub fn new(config: Config) -> Self {
         Analyzer {
-            config,
             reassembler: Reassembler::new(config.tcp),
             decoders: HashMap::new(),
             budget: MemoryBudget::new(config.memory_budget),
+            config, // déplacé en dernier : les champs ci-dessus l'utilisent
         }
     }
 
@@ -206,8 +250,15 @@ impl Analyzer {
     where
         F: FnMut(Event<'_>),
     {
-        for event in self.reassembler.process(segment, now) {
-            self.dispatch(event, &mut on_event);
+        if self.config.checksums.applies_to(segment) && !segment.checksums_valid {
+            // Insertion évitée : ce segment n'atteindra jamais la destination.
+            on_event(Event::InvalidChecksum {
+                flow: FlowKey::of(segment),
+            });
+        } else {
+            for event in self.reassembler.process(segment, now) {
+                self.dispatch(event, &mut on_event);
+            }
         }
         for event in self.reassembler.expire_idle(now) {
             self.dispatch(event, &mut on_event);
@@ -322,6 +373,7 @@ mod tests {
                 psh: !payload.is_empty(),
             },
             payload,
+            checksums_valid: true,
         }
     }
 
@@ -452,5 +504,59 @@ mod tests {
         });
         let attendu = FlowKey::of(&seg(CLIENT, BROKER, 0, "", b""));
         assert_eq!(flux, Some(attendu));
+    }
+
+    // --- Politique de vérification des checksums ---
+
+    /// Segment au checksum invalide du client (127.0.0.1) vers le broker.
+    fn segment_invalide(seq: u32, payload: &[u8]) -> TcpSegment<'_> {
+        TcpSegment {
+            checksums_valid: false,
+            ..seg(CLIENT, BROKER, seq, "", payload)
+        }
+    }
+
+    fn avec_politique(checksums: ChecksumPolicy) -> Analyzer {
+        let mut a = Analyzer::new(Config {
+            checksums,
+            ..Config::default()
+        });
+        analyser(&mut a, &seg(CLIENT, BROKER, 1000, "S", b""), T0);
+        a
+    }
+
+    #[test]
+    fn sans_verification_un_segment_invalide_est_analyse() {
+        let mut a = avec_politique(ChecksumPolicy::Off);
+        assert_eq!(
+            analyser(&mut a, &segment_invalide(1001, &PUBLISH), T0),
+            vec![LIGNE_PUBLISH]
+        );
+    }
+
+    #[test]
+    fn avec_verification_un_segment_invalide_est_ignore() {
+        let mut a = avec_politique(ChecksumPolicy::All);
+        assert_eq!(
+            analyser(&mut a, &segment_invalide(1001, &PUBLISH), T0),
+            vec!["[!] segment au checksum invalide ignoré (la destination le rejette aussi)"]
+        );
+        // Le segment n'est pas entré dans le flux : le vrai est accepté ensuite.
+        assert_eq!(
+            analyser(&mut a, &seg(CLIENT, BROKER, 1001, "", &PUBLISH), T0),
+            vec![LIGNE_PUBLISH]
+        );
+    }
+
+    #[test]
+    fn seuls_les_segments_recus_par_les_adresses_locales_sont_verifies() {
+        let broker = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10));
+        let politique = ChecksumPolicy::ReceivedBy(vec![broker]);
+        let mut recu = seg(CLIENT, BROKER, 1, "", b"");
+        recu.dst_ip = broker; // vers la machine de capture : vérifié
+        let mut emis = seg(BROKER, CLIENT, 1, "", b"");
+        emis.src_ip = broker; // depuis la machine de capture : offload, non vérifié
+        assert!(politique.applies_to(&recu));
+        assert!(!politique.applies_to(&emis));
     }
 }

@@ -10,6 +10,8 @@ use std::net::IpAddr;
 
 use etherparse::{NetSlice, SlicedPacket, TransportSlice};
 
+use crate::checksum;
+
 /// Les flags TCP qui nous intéressent, décodés en booléens.
 ///
 /// `#[derive(...)]` demande au compilateur d'écrire automatiquement
@@ -62,6 +64,13 @@ pub struct TcpSegment<'a> {
     pub ack: u32,
     pub flags: TcpFlags,
     pub payload: &'a [u8],
+    /// Les checksums IP (IPv4) et TCP de la trame sont corrects.
+    ///
+    /// Le parser constate seulement : c'est à l'appelant de décider s'il faut
+    /// ignorer un segment invalide. Les paquets ÉMIS par la machine de capture
+    /// ont souvent des checksums faux à cause de l'offload, et l'interface
+    /// loopback ne calcule jamais le checksum TCP.
+    pub checksums_valid: bool,
 }
 
 /// Résultat du parsing d'une trame valide.
@@ -127,7 +136,28 @@ pub fn parse_ethernet(frame: &[u8]) -> Result<Parsed<'_>, ParseError> {
         _ => return Ok(Parsed::Other),
     };
 
-    // 4. On assemble notre structure. `tcp.payload()` renvoie une sous-slice
+    // 4. Checksums. `tcp.slice()` contient l'en-tête TCP et ses données, limités
+    //    à la longueur annoncée par IP : le bourrage Ethernet éventuel des
+    //    petites trames n'en fait pas partie.
+    let checksums_valid = match &sliced.net {
+        Some(NetSlice::Ipv4(ipv4)) => {
+            let header = ipv4.header();
+            checksum::ipv4_header_is_valid(header.slice())
+                && checksum::tcp_ipv4_is_valid(
+                    header.source_addr(),
+                    header.destination_addr(),
+                    tcp.slice(),
+                )
+        }
+        Some(NetSlice::Ipv6(ipv6)) => checksum::tcp_ipv6_is_valid(
+            ipv6.header().source_addr(),
+            ipv6.header().destination_addr(),
+            tcp.slice(),
+        ),
+        _ => false,
+    };
+
+    // 5. On assemble notre structure. `tcp.payload()` renvoie une sous-slice
     //    de `frame` : c'est elle qui donne sa durée de vie au résultat.
     Ok(Parsed::Tcp(TcpSegment {
         src_ip,
@@ -144,6 +174,7 @@ pub fn parse_ethernet(frame: &[u8]) -> Result<Parsed<'_>, ParseError> {
             psh: tcp.psh(),
         },
         payload: tcp.payload(),
+        checksums_valid,
     }))
 }
 
@@ -234,5 +265,30 @@ mod tests {
         // En-tête Ethernet avec l'EtherType expérimental 0x88B5, puis 4 octets.
         let frame = [0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x88, 0xb5, 1, 2, 3, 4];
         assert!(matches!(parse_ethernet(&frame), Ok(Parsed::Other)));
+    }
+
+    #[test]
+    fn sur_loopback_le_checksum_tcp_n_est_pas_calcule() {
+        // Trame réelle capturée sur `lo` : l'en-tête IP est correct (0xd18a),
+        // mais le champ checksum TCP ne contient que la somme du
+        // pseudo-en-tête (0xfe30), comme l'explique l'offload.
+        let seg = expect_tcp(&FRAME_SYN);
+        assert!(!seg.checksums_valid);
+    }
+
+    #[test]
+    fn une_trame_aux_checksums_corrects_est_reconnue() {
+        let builder = etherparse::PacketBuilder::ethernet2([0; 6], [0; 6])
+            .ipv4([192, 168, 1, 20], [192, 168, 1, 10], 64)
+            .tcp(40000, 1883, 1, 65_535)
+            .ack(1);
+        let mut frame = Vec::new();
+        builder.write(&mut frame, &[0xc0, 0x00]).unwrap();
+        assert!(expect_tcp(&frame).checksums_valid);
+
+        // Un seul bit modifié dans les données : checksum TCP invalide.
+        let dernier = frame.len() - 1;
+        frame[dernier] ^= 0x01;
+        assert!(!expect_tcp(&frame).checksums_valid);
     }
 }
