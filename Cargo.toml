@@ -1,0 +1,19 @@
+[package]
+name = "mqtt-sniffer"
+version = "0.2.0"
+edition = "2024"
+description = "Sniffer défensif pédagogique : capture -> Ethernet/IP/TCP -> MQTT"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Binding Rust de libpcap (le moteur de capture de tcpdump/Wireshark).
+# Doc : https://docs.rs/pcap
+pcap = "2"
+
+# Parsing des arguments CLI, même choix que pour le scanner de ports.
+clap = { version = "4", features = ["derive"] }
+etherparse = "0.21.0"
+
+# Découpage zéro-copie des en-têtes Ethernet / IP / TCP.
+# Doc : https://docs.rs/etherparse
+
