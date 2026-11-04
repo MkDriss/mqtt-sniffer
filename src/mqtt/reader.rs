@@ -79,3 +79,54 @@ impl<'a> Reader<'a> {
         }
     }
 }
+
+// ===========================================================================
+// Tests
+// ===========================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lecture_au_dela_de_la_fin_est_rejetee() {
+        // Un seul octet disponible, alors qu'un u16 en demande deux.
+        let mut r = Reader::new(&[0x00]);
+        assert_eq!(
+            r.u16("champ"),
+            Err(MqttError::BoundaryCrossed { field: "champ" })
+        );
+    }
+
+    #[test]
+    fn chaine_utf8_invalide_est_rejetee() {
+        // 0xff n'apparaît jamais dans de l'UTF-8 valide [MQTT-1.5.3-1].
+        let mut r = Reader::new(&[0x00, 0x01, 0xff]);
+        assert_eq!(
+            r.string("champ"),
+            Err(MqttError::InvalidUtf8 { field: "champ" })
+        );
+    }
+
+    #[test]
+    fn caractere_nul_est_rejete() {
+        // "a" suivi de U+0000, interdit dans une chaîne MQTT [MQTT-1.5.3-2].
+        let mut r = Reader::new(&[0x00, 0x02, b'a', 0x00]);
+        assert_eq!(
+            r.string("champ"),
+            Err(MqttError::NullCharacter { field: "champ" })
+        );
+    }
+
+    #[test]
+    fn octets_non_lus_sont_signales() {
+        let mut r = Reader::new(&[0x01, 0x02, 0x03]);
+        r.u8("champ").unwrap();
+        assert_eq!(
+            r.expect_end(PacketType::Connect),
+            Err(MqttError::TrailingBytes {
+                packet_type: PacketType::Connect,
+                count: 2
+            })
+        );
+    }
+}

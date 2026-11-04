@@ -193,4 +193,159 @@ mod tests {
             Err(MqttError::InvalidConnectFlags(_))
         ));
     }
+
+    // --- Constructeur de CONNECT pour les tests d'anomalies ---
+
+    /// Client Identifier vide (deux octets de longueur à 0).
+    const SANS_ID: &[u8] = &[0x00, 0x00];
+
+    /// Construit un CONNECT : nom de protocole, niveau, Connect Flags,
+    /// Keep Alive de 60 s, puis le payload donné. Chaque test d'anomalie ne
+    /// change qu'un seul de ces éléments par rapport au CONNECT valide de
+    /// `connect_de_mosquitto_sub` (b"MQTT", 4, 0x02, SANS_ID).
+    fn connect_avec(nom: &[u8], niveau: u8, flags: u8, payload: &[u8]) -> Vec<u8> {
+        let mut corps = Vec::new();
+        corps.extend_from_slice(&(nom.len() as u16).to_be_bytes());
+        corps.extend_from_slice(nom);
+        corps.push(niveau);
+        corps.push(flags);
+        corps.extend_from_slice(&[0x00, 0x3c]);
+        corps.extend_from_slice(payload);
+        assert!(
+            corps.len() < 128,
+            "Remaining Length sur un seul octet uniquement"
+        );
+        let mut paquet = vec![0x10, corps.len() as u8];
+        paquet.extend_from_slice(&corps);
+        paquet
+    }
+
+    /// Vérifie que le CONNECT est rejeté pour la règle de la spec `exigence`.
+    fn assert_connect_flags_invalides(paquet: &[u8], exigence: &str) {
+        match decode(paquet) {
+            Err(MqttError::InvalidConnectFlags(raison)) => {
+                assert!(raison.contains(exigence), "mauvaise règle : {raison}")
+            }
+            autre => panic!("InvalidConnectFlags attendu, obtenu : {autre:?}"),
+        }
+    }
+
+    #[test]
+    fn le_constructeur_produit_le_connect_de_mosquitto_sub() {
+        // Garantit que les tests suivants partent bien d'un CONNECT valide.
+        let paquet = connect_avec(b"MQTT", 4, 0x02, SANS_ID);
+        assert_eq!(
+            paquet,
+            [0x10, 0x0c, 0x00, 0x04, b'M', b'Q', b'T', b'T', 0x04, 0x02, 0x00, 0x3c, 0x00, 0x00]
+        );
+    }
+
+    #[test]
+    fn nom_de_protocole_inconnu_est_rejete() {
+        let paquet = connect_avec(b"MQTX", 4, 0x02, SANS_ID);
+        assert_eq!(decode(&paquet), Err(MqttError::InvalidProtocolName));
+    }
+
+    #[test]
+    fn niveau_de_protocole_5_n_est_pas_supporte() {
+        let paquet = connect_avec(b"MQTT", 5, 0x02, SANS_ID);
+        assert_eq!(decode(&paquet), Err(MqttError::UnsupportedProtocolLevel(5)));
+    }
+
+    #[test]
+    fn bit_reserve_des_connect_flags_est_rejete() {
+        // 0x03 = Clean Session + bit 0 (réservé).
+        let paquet = connect_avec(b"MQTT", 4, 0x03, SANS_ID);
+        assert_eq!(
+            decode(&paquet),
+            Err(MqttError::ReservedBits {
+                field: "connect flags [MQTT-3.1.2-3]"
+            })
+        );
+    }
+
+    #[test]
+    fn will_qos_sans_will_flag_est_rejete() {
+        // 0x0A = Will QoS 1 (bits 4-3 = 01) + Clean Session, sans Will Flag.
+        let paquet = connect_avec(b"MQTT", 4, 0x0a, SANS_ID);
+        assert_connect_flags_invalides(&paquet, "MQTT-3.1.2-13");
+    }
+
+    #[test]
+    fn will_retain_sans_will_flag_est_rejete() {
+        // 0x22 = Will Retain (bit 5) + Clean Session, sans Will Flag.
+        let paquet = connect_avec(b"MQTT", 4, 0x22, SANS_ID);
+        assert_connect_flags_invalides(&paquet, "MQTT-3.1.2-15");
+    }
+
+    #[test]
+    fn client_id_vide_sans_clean_session_est_rejete() {
+        // 0x00 : Clean Session à 0, alors que le Client Identifier est vide.
+        let paquet = connect_avec(b"MQTT", 4, 0x00, SANS_ID);
+        assert_connect_flags_invalides(&paquet, "MQTT-3.1.3-7");
+    }
+
+    #[test]
+    fn will_qos_3_est_interdite() {
+        // 0x1E = Will QoS 3 (bits 4-3 = 11) + Will Flag + Clean Session.
+        // Payload : client id vide, Will Topic "w", Will Message "x".
+        let payload = [0x00, 0x00, 0x00, 0x01, b'w', 0x00, 0x01, b'x'];
+        let paquet = connect_avec(b"MQTT", 4, 0x1e, &payload);
+        assert_eq!(decode(&paquet), Err(MqttError::InvalidQos(3)));
+    }
+
+    #[test]
+    fn will_valide_est_decode() {
+        // Contre-test : 0x0E = Will QoS 1 + Will Flag + Clean Session.
+        let payload = [0x00, 0x00, 0x00, 0x01, b'w', 0x00, 0x01, b'x'];
+        let paquet = connect_avec(b"MQTT", 4, 0x0e, &payload);
+        let (packet, _) = complete(&paquet);
+        let Packet::Connect(c) = packet else {
+            panic!("CONNECT attendu")
+        };
+        assert_eq!(
+            c.will,
+            Some(Will {
+                topic: "w",
+                message: b"x",
+                qos: QoS::AtLeastOnce,
+                retain: false
+            })
+        );
+    }
+
+    #[test]
+    fn octet_en_trop_apres_le_payload_est_signale() {
+        let paquet = connect_avec(b"MQTT", 4, 0x02, &[0x00, 0x00, 0xff]);
+        assert_eq!(
+            decode(&paquet),
+            Err(MqttError::TrailingBytes {
+                packet_type: PacketType::Connect,
+                count: 1
+            })
+        );
+    }
+
+    #[test]
+    fn connack_de_mauvaise_longueur_est_rejete() {
+        assert_eq!(
+            decode(&[0x20, 0x03, 0x00, 0x00, 0x00]),
+            Err(MqttError::UnexpectedLength {
+                packet_type: PacketType::ConnAck,
+                expected: 2,
+                actual: 3
+            })
+        );
+    }
+
+    #[test]
+    fn connack_avec_bit_reserve_est_rejete() {
+        // Seul le bit 0 (Session Present) est défini ; ici c'est le bit 1.
+        assert_eq!(
+            decode(&[0x20, 0x02, 0x02, 0x00]),
+            Err(MqttError::ReservedBits {
+                field: "connect acknowledge flags"
+            })
+        );
+    }
 }

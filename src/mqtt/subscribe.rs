@@ -53,6 +53,8 @@ pub(super) fn decode_subscribe(body: &[u8]) -> Result<Subscribe<'_>, MqttError> 
         let filter = r.string("topic filter")?;
         let requested = r.u8("requested qos")?;
         if requested & 0b1111_1100 != 0 {
+            // Identifiant reproduit tel quel : la spec officielle l'écrit
+            // « MQTT-3-8.3-4 » (avec un tiret au lieu d'un point).
             return Err(MqttError::ReservedBits {
                 field: "requested qos [MQTT-3-8.3-4]",
             });
@@ -179,6 +181,68 @@ mod tests {
         assert_eq!(
             decode(&[0xa2, 0x02, 0x00, 0x02]),
             Err(MqttError::EmptyUnsubscribe)
+        );
+    }
+
+    #[test]
+    fn subscribe_d_identifiant_nul_est_rejete() {
+        // Filtre "a" en QoS 0, identifiant 0.
+        assert_eq!(
+            decode(&[0x82, 0x06, 0x00, 0x00, 0x00, 0x01, b'a', 0x00]),
+            Err(MqttError::ZeroPacketId)
+        );
+    }
+
+    #[test]
+    fn qos_demandee_avec_bits_reserves_est_rejetee() {
+        // 0x04 : bit 2 levé, alors que seuls les bits 1-0 portent la QoS.
+        assert_eq!(
+            decode(&[0x82, 0x06, 0x00, 0x01, 0x00, 0x01, b'a', 0x04]),
+            Err(MqttError::ReservedBits {
+                field: "requested qos [MQTT-3-8.3-4]"
+            })
+        );
+    }
+
+    #[test]
+    fn qos_demandee_3_est_rejetee() {
+        assert_eq!(
+            decode(&[0x82, 0x06, 0x00, 0x01, 0x00, 0x01, b'a', 0x03]),
+            Err(MqttError::InvalidQos(3))
+        );
+    }
+
+    #[test]
+    fn subscribe_sans_filtre_est_rejete() {
+        assert_eq!(
+            decode(&[0x82, 0x02, 0x00, 0x01]),
+            Err(MqttError::EmptySubscribe)
+        );
+    }
+
+    #[test]
+    fn suback_avec_code_reserve_est_rejete() {
+        assert_eq!(
+            decode(&[0x90, 0x03, 0x00, 0x01, 0x03]),
+            Err(MqttError::InvalidSubAckCode(3))
+        );
+    }
+
+    #[test]
+    fn suback_de_refus_est_accepte() {
+        // Contre-test : 0x80 (abonnement refusé) est un code valide.
+        let (packet, _) = complete(&[0x90, 0x03, 0x00, 0x01, 0x80]);
+        let Packet::SubAck(s) = packet else {
+            panic!("SUBACK attendu")
+        };
+        assert_eq!(s.return_codes, &[0x80]);
+    }
+
+    #[test]
+    fn unsubscribe_d_identifiant_nul_est_rejete() {
+        assert_eq!(
+            decode(&[0xa2, 0x05, 0x00, 0x00, 0x00, 0x01, b'a']),
+            Err(MqttError::ZeroPacketId)
         );
     }
 }

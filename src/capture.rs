@@ -1,7 +1,6 @@
 //! Module `capture` : tout ce qui dépend de libpcap est isolé ici.
 //!
-//! Objectif d'architecture : le reste du programme (parsing, décodage MQTT,
-//! plus tard l'IDS) ne manipule que des tranches d'octets `&[u8]`. Il ne sait
+//! Objectif d'architecture : le reste du programme ne manipule que des tranches d'octets `&[u8]`. Il ne sait
 //! pas d'où viennent les paquets (interface live ou fichier .pcap rejoué).
 
 use pcap::{Active, Capture, Device};

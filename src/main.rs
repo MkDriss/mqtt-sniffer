@@ -1,4 +1,4 @@
-//! mqtt-sniffer — étape 3a : capture + parsing Ethernet -> IP -> TCP + décodage MQTT.
+//! mqtt-sniffer
 //!
 //! Ce fichier n'est qu'une interface en ligne de commande : toute la logique
 //! vit dans la bibliothèque (`src/lib.rs`), importée ci-dessous.
@@ -134,7 +134,7 @@ fn handle_frame(n: u64, frame: &[u8], args: &Args) {
 ///
 /// Un segment peut contenir plusieurs messages collés : on avance de
 /// `consumed` octets après chacun. Un message coupé en deux segments est
-/// signalé ici ; son réassemblage est l'objet de l'étape 3b.
+
 fn print_mqtt(payload: &[u8], direction: &str, show_secrets: bool) {
     let mut offset = 0;
     while offset < payload.len() {
@@ -149,7 +149,7 @@ fn print_mqtt(payload: &[u8], direction: &str, show_secrets: bool) {
             Ok(mqtt::Decoded::Incomplete { needed }) => {
                 println!(
                     "        MQTT {direction} : message incomplet, il manque au moins \
-                     {needed} octet(s) (réassemblage : étape 3b)"
+                     {needed} octet(s)"
                 );
                 break;
             }
@@ -161,7 +161,7 @@ fn print_mqtt(payload: &[u8], direction: &str, show_secrets: bool) {
     }
 }
 
-/// Hexdump (offset | hex | ASCII), repris de l'étape 1.
+/// Hexdump (offset | hex | ASCII)
 fn print_hex(data: &[u8]) {
     for (i, chunk) in data.chunks(16).enumerate() {
         let hex: Vec<String> = chunk.iter().map(|b| format!("{b:02x}")).collect();

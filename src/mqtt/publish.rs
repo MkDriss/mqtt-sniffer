@@ -206,4 +206,56 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn publish_dup_en_qos0_est_interdit() {
+        // PUBLISH avec DUP = 1 et QoS 0 : combinaison interdite [MQTT-3.3.1-2].
+        let buf = [0x38, 0x03, 0x00, 0x01, b'a'];
+        assert_eq!(decode(&buf), Err(MqttError::DupWithQos0));
+    }
+
+    #[test]
+    fn publish_dup_en_qos1_est_accepte() {
+        // Contre-test : DUP = 1 est légitime en QoS 1 (retransmission).
+        // 0x3A = PUBLISH, DUP = 1, QoS 1 ; topic "a", identifiant 7.
+        let (packet, _) = complete(&[0x3a, 0x05, 0x00, 0x01, b'a', 0x00, 0x07]);
+        let Packet::Publish(p) = packet else {
+            panic!("PUBLISH attendu")
+        };
+        assert!(p.dup);
+        assert_eq!(p.qos, QoS::AtLeastOnce);
+        assert_eq!(p.packet_id, Some(7));
+    }
+
+    #[test]
+    fn jokers_interdits_dans_le_topic_d_un_publish() {
+        // Les jokers ne sont permis que dans les filtres d'abonnement.
+        assert_eq!(
+            decode(&[0x30, 0x05, 0x00, 0x03, b'a', b'/', b'#']),
+            Err(MqttError::WildcardInTopicName)
+        );
+        assert_eq!(
+            decode(&[0x30, 0x05, 0x00, 0x03, b'a', b'/', b'+']),
+            Err(MqttError::WildcardInTopicName)
+        );
+    }
+
+    #[test]
+    fn identifiant_nul_en_qos1_est_rejete() {
+        // 0x32 = PUBLISH QoS 1 ; topic "a", identifiant 0.
+        assert_eq!(
+            decode(&[0x32, 0x05, 0x00, 0x01, b'a', 0x00, 0x00]),
+            Err(MqttError::ZeroPacketId)
+        );
+    }
+
+    #[test]
+    fn topic_utf8_invalide_est_rejete() {
+        assert_eq!(
+            decode(&[0x30, 0x03, 0x00, 0x01, 0xff]),
+            Err(MqttError::InvalidUtf8 {
+                field: "topic name"
+            })
+        );
+    }
 }

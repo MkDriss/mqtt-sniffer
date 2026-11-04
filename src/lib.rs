@@ -1,7 +1,7 @@
 //! Bibliothèque `mqtt_sniffer` : la logique réutilisable du projet.
 //!
 //! Le package contient deux crates :
-//! - ce crate bibliothèque (`src/lib.rs`), réutilisable par le futur IDS ;
+//! - ce crate bibliothèque (`src/lib.rs`);
 //! - le crate binaire (`src/main.rs`), une simple interface en ligne de commande.
 
 pub mod capture;

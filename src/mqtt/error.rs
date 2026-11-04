@@ -59,14 +59,14 @@ impl fmt::Display for MqttError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use MqttError::*;
         match self {
-            InvalidPacketType(t) => write!(f, "type de paquet réservé ({t}) [MQTT-2.2.1]"),
+            InvalidPacketType(t) => write!(f, "type de paquet réservé ({t}) (spec §2.2.1)"),
             InvalidFlags { packet_type, flags } => write!(
                 f,
                 "flags {flags:#06b} invalides pour {} [MQTT-2.2.2-1]",
                 packet_type.name()
             ),
             MalformedRemainingLength => {
-                write!(f, "Remaining Length sur plus de 4 octets [MQTT-2.2.3]")
+                write!(f, "Remaining Length sur plus de 4 octets (spec §2.2.3)")
             }
             BoundaryCrossed { field } => {
                 write!(f, "le champ « {field} » dépasse la fin du paquet")

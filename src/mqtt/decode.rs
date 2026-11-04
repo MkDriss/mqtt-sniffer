@@ -214,4 +214,23 @@ mod tests {
             Err(MqttError::ZeroPacketId)
         );
     }
+
+    #[test]
+    fn ping_et_disconnect_avec_un_corps_sont_rejetes() {
+        // Ces trois paquets n'ont jamais de corps : Remaining Length = 0.
+        for (octet, packet_type) in [
+            (0xc0, PacketType::PingReq),
+            (0xd0, PacketType::PingResp),
+            (0xe0, PacketType::Disconnect),
+        ] {
+            assert_eq!(
+                decode(&[octet, 0x01, 0x00]),
+                Err(MqttError::UnexpectedLength {
+                    packet_type,
+                    expected: 0,
+                    actual: 1
+                })
+            );
+        }
+    }
 }
