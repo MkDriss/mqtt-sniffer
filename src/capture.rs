@@ -2,9 +2,13 @@
 //!
 //! Objectif d'architecture : le reste du programme (parsing, réassemblage,
 //! décodage MQTT) ne manipule que des tranches d'octets `&[u8]`. Il ne sait
-//! pas d'où viennent les paquets.
+//! pas d'où viennent les paquets : interface réseau ([`open_live`]) ou fichier
+//! de capture `.pcap` ([`open_offline`]).
 
-use pcap::{Active, Capture, Device};
+use std::path::Path;
+use std::time::Duration;
+
+use pcap::{Active, Capture, Device, Offline, PacketHeader};
 
 /// Ouvre une capture live sur `interface` et applique le filtre BPF `bpf_filter`.
 ///
@@ -30,6 +34,28 @@ pub fn open_live(
     cap.filter(bpf_filter, true)?;
 
     Ok(cap)
+}
+
+/// Ouvre un fichier de capture (format pcap, par exemple produit par
+/// `tcpdump -w`) et applique le filtre BPF `bpf_filter`.
+///
+/// Aucun privilège n'est nécessaire : on lit un fichier, pas une interface.
+/// Pour un fichier, le filtre est appliqué par libpcap dans le programme,
+/// et non dans le noyau.
+pub fn open_offline(path: &Path, bpf_filter: &str) -> Result<Capture<Offline>, pcap::Error> {
+    let mut cap = Capture::from_file(path)?;
+    cap.filter(bpf_filter, true)?;
+    Ok(cap)
+}
+
+/// Horodatage de capture d'une trame, converti en `Duration` (temps écoulé
+/// depuis le 1er janvier 1970).
+pub fn timestamp(header: &PacketHeader) -> Duration {
+    // Les champs de `timeval` sont signés ; une valeur négative est impossible
+    // en pratique, et serait remplacée par 0 plutôt que de faire paniquer.
+    let secs = u64::try_from(header.ts.tv_sec).unwrap_or(0);
+    let micros = u32::try_from(header.ts.tv_usec).unwrap_or(0).min(999_999);
+    Duration::new(secs, micros * 1000)
 }
 
 /// Liste les interfaces visibles par libpcap (équivalent de `tcpdump -D`).

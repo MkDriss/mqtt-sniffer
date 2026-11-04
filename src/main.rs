@@ -4,12 +4,13 @@
 //! bibliothèque et affiche les événements observés. Toute la logique est dans
 //! la bibliothèque (`src/lib.rs`) ; ce fichier ne fait que capturer et afficher.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::Parser as ClapParser; // renommé pour éviter la confusion avec notre module `parser`
 use mqtt_sniffer::analyzer::{Analyzer, Config, Event};
 use mqtt_sniffer::{capture, parser};
-use pcap::Linktype;
+use pcap::{Activated, Capture, Linktype};
 
 /// Sniffer défensif MQTT : décode le trafic MQTT 3.1.1 en clair.
 #[derive(ClapParser, Debug)]
@@ -18,6 +19,10 @@ struct Args {
     /// Interface à écouter (ex. lo, wlp3s0, eth0)
     #[arg(short, long, default_value = "lo")]
     interface: String,
+
+    /// Lit un fichier de capture (.pcap) au lieu d'écouter une interface
+    #[arg(short, long, value_name = "FICHIER", conflicts_with = "interface")]
+    read: Option<PathBuf>,
 
     /// Filtre BPF exécuté dans le noyau (syntaxe tcpdump)
     #[arg(short, long, default_value = "tcp port 1883")]
@@ -54,8 +59,35 @@ fn main() -> Result<(), pcap::Error> {
         return Ok(());
     }
 
-    let mut cap = capture::open_live(&args.interface, &args.filter, 65535, 1000)?;
+    match &args.read {
+        Some(path) => {
+            println!(
+                "[*] Lecture de {} | filtre BPF : \"{}\"",
+                path.display(),
+                args.filter
+            );
+            let cap = capture::open_offline(path, &args.filter)?;
+            let seen = run(cap, &args)?;
+            println!("[*] Fin du fichier : {seen} trame(s) lue(s)");
+        }
+        None => {
+            println!(
+                "[*] Écoute sur {} | filtre BPF : \"{}\"",
+                args.interface, args.filter
+            );
+            let cap = capture::open_live(&args.interface, &args.filter, 65535, 1000)?;
+            run(cap, &args)?;
+        }
+    }
+    Ok(())
+}
 
+/// Lit les trames d'une capture, interface ou fichier, et les analyse.
+/// Renvoie le nombre de trames lues.
+///
+/// `T: Activated` : cette fonction accepte toute capture prête à être lue,
+/// `Capture<Active>` (interface) comme `Capture<Offline>` (fichier).
+fn run<T: Activated + ?Sized>(mut cap: Capture<T>, args: &Args) -> Result<u64, pcap::Error> {
     // Le parser ne sait lire que des trames qui commencent par un en-tête
     // Ethernet. Sur `any`, libpcap fournit un autre en-tête (Linux SLL) :
     // on refuse proprement plutôt que d'afficher n'importe quoi.
@@ -65,13 +97,8 @@ fn main() -> Result<(), pcap::Error> {
             "[!] Type de lien {linktype:?} non supporté (Ethernet attendu). \
              Choisis une interface comme lo, wlp0s20f3 ou enp0s31f6."
         );
-        return Ok(());
+        return Ok(0);
     }
-
-    println!(
-        "[*] Écoute sur {} | filtre BPF : \"{}\"",
-        args.interface, args.filter
-    );
 
     let mut analyzer = Analyzer::new(Config::default());
     // Horodatage de la première trame : les temps affichés lui sont relatifs.
@@ -82,29 +109,21 @@ fn main() -> Result<(), pcap::Error> {
         match cap.next_packet() {
             Ok(packet) => {
                 seen += 1;
-                let now = timestamp(packet.header);
+                let now = capture::timestamp(packet.header);
                 let elapsed = now.saturating_sub(*start.get_or_insert(now));
-                handle_frame(&mut analyzer, packet.data, now, elapsed, &args);
+                handle_frame(&mut analyzer, packet.data, now, elapsed, args);
                 if args.count != 0 && seen >= args.count {
                     break;
                 }
             }
             // Pas de trame pendant le délai d'attente : ce n'est pas une erreur.
             Err(pcap::Error::TimeoutExpired) => continue,
+            // Fin du fichier de capture.
+            Err(pcap::Error::NoMorePackets) => break,
             Err(e) => return Err(e),
         }
     }
-    Ok(())
-}
-
-/// Horodatage de capture fourni par libpcap, converti en `Duration`
-/// (temps écoulé depuis le 1er janvier 1970).
-fn timestamp(header: &pcap::PacketHeader) -> Duration {
-    // Les champs de `timeval` sont signés ; une valeur négative est impossible
-    // en pratique, et serait remplacée par 0 plutôt que de faire paniquer.
-    let secs = u64::try_from(header.ts.tv_sec).unwrap_or(0);
-    let micros = u32::try_from(header.ts.tv_usec).unwrap_or(0).min(999_999);
-    Duration::new(secs, micros * 1000)
+    Ok(seen)
 }
 
 /// Parse une trame, l'affiche si demandé, puis la confie à l'analyseur.

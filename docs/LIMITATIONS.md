@@ -18,6 +18,7 @@ sniffer affiche.
 |---|---|
 | **Checksums IP et TCP non vérifiés** | Choix lié à l'offload, qui rend faux les checksums des paquets émis par la machine de capture. Conséquences : une trame corrompue n'est pas détectée, et un segment au checksum volontairement invalide, rejeté par le système de la machine destinataire, est quand même affiché et décodé (attaque par *insertion*, voir le glossaire). |
 | **Fragments IP non réassemblés** | Un datagramme IP fragmenté n'est pas recomposé : son contenu TCP n'est pas lu correctement. Les messages MQTT courts ne sont normalement jamais fragmentés. |
+| **Lecture de fichiers testée avec le format pcap classique** | L'option `--read` a été testée avec des fichiers pcap (ceux de `tcpdump -w` et ceux de `examples/scenarios.rs`), pas avec le format pcapng que Wireshark utilise par défaut. |
 | **Seul MQTT 3.1.1 est supporté** | Un client MQTT 3.1 ou 5 provoque l'erreur `UnsupportedProtocolLevel`. |
 | **Seul le type de lien Ethernet est supporté** | L'interface pseudo `any` (en-tête Linux SLL) est refusée au démarrage. |
 | **Port MQTT fixé à 1883 dans la ligne de commande** | Avec un autre filtre BPF, le trafic des autres ports est réassemblé mais pas décodé. Le port est réglable dans la bibliothèque (`analyzer::Config::mqtt_port`), pas encore par une option. |

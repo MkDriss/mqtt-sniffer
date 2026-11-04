@@ -42,6 +42,10 @@ Wireshark. La crate Rust `pcap` en est un binding [PCAP-RS].
 pour le Wi-Fi, `enp0s31f6` pour l'Ethernet, `lo` pour le loopback).
 *(explication personnelle)*
 
+**Fichier pcap** — Format de fichier de capture de libpcap : un en-tête de
+24 octets (nombre magique `0xa1b2c3d4`, type de lien...), puis chaque trame
+précédée d'un en-tête de 16 octets (horodatage, longueurs) [PCAP-SAVEFILE].
+
 **Loopback (`lo`)** — Interface virtuelle qui relie la machine à elle-même
 (adresse 127.0.0.1). Sous Linux, elle fournit un faux en-tête Ethernet aux
 outils de capture [TCPDUMP-LO].
@@ -438,6 +442,14 @@ qu'il appelle pour chaque événement observé. *(explication personnelle)*
 endroit où elle est utilisée : deux références à la même constante n'ont pas
 forcément la même adresse mémoire [RUST-REF-CONST].
 
+**Test d'intégration** — Test placé dans le dossier `tests/`, compilé comme un
+programme séparé qui n'utilise que l'interface publique de la bibliothèque ;
+le code partagé entre tests va dans `tests/common/mod.rs` [RUST-BOOK, ch. 11.3].
+
+**Scénario de test** — Capture fabriquée pour reproduire une situation précise
+(perte, désordre, RST forgé...), rejouable avec `--read`
+(`tests/common/mod.rs`). *(explication personnelle)*
+
 **Test unitaire** — Fonction `#[test]` placée dans un module `#[cfg(test)]`
 du même fichier, compilée seulement par `cargo test` [RUST-BOOK, ch. 11.3].
 
@@ -529,6 +541,7 @@ libpcap avec la précision de la microseconde [PCAP-RS].
 - **[MQTT]** OASIS, *MQTT Version 3.1.1*, A. Banks, R. Gupta (éd.), 2014. https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html
 - **[PACKET7]** packet(7), Linux man-pages. https://man7.org/linux/man-pages/man7/packet.7.html
 - **[PCAP-RS]** Documentation de la crate `pcap`. https://docs.rs/pcap
+- **[PCAP-SAVEFILE]** pcap-savefile(5), « libpcap savefile format », manuel de libpcap. https://www.mankier.com/5/pcap-savefile
 - **[PL-CHECKSUM]** J. Stretch, « Disabling checksum validation in Wireshark », PacketLife.net, 2008. https://packetlife.net/blog/2008/aug/23/disabling-checksum-validation-wireshark/
 - **[PTACEK-1998]** T. H. Ptacek, T. N. Newsham, « Insertion, Evasion, and Denial of Service: Eluding Network Intrusion Detection », Secure Networks, Inc., janvier 1998. https://crypto.stanford.edu/cs155old/cs155-spring08/papers/IDSpaper.pdf
 - **[RFC791]** J. Postel, RFC 791, *Internet Protocol*, 1981. https://www.rfc-editor.org/rfc/rfc791
