@@ -26,11 +26,38 @@ fn show_text(text: &str) -> String {
 fn show_bytes(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(text) => show_text(text),
-        Err(_) => {
-            let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
-            format!("0x{}", hex.join(""))
-        }
+        Err(_) => show_hex(bytes),
     }
+}
+
+/// Octets en hexadécimal, précédés de `0x`.
+fn show_hex(bytes: &[u8]) -> String {
+    let hex: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!("0x{}", hex.join(""))
+}
+
+/// Nombre maximal d'octets de payload affichés : au-delà, l'affichage est
+/// tronqué pour qu'un gros message ne remplisse pas le terminal.
+const MAX_PAYLOAD_SHOWN: usize = 64;
+
+/// Affiche un payload, tronqué à [`MAX_PAYLOAD_SHOWN`] octets.
+fn show_payload(bytes: &[u8]) -> String {
+    if bytes.len() <= MAX_PAYLOAD_SHOWN {
+        return show_bytes(bytes);
+    }
+    let shown = match std::str::from_utf8(bytes) {
+        Ok(text) => {
+            // Couper sur une frontière de caractère, jamais au milieu d'un
+            // caractère UTF-8 de plusieurs octets.
+            let mut cut = MAX_PAYLOAD_SHOWN;
+            while !text.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            show_text(&text[..cut])
+        }
+        Err(_) => show_hex(&bytes[..MAX_PAYLOAD_SHOWN]),
+    };
+    format!("{shown}… ({} octets au total)", bytes.len())
 }
 
 impl Packet<'_> {
@@ -86,7 +113,7 @@ impl Packet<'_> {
                     p.qos as u8,
                     u8::from(p.retain),
                     u8::from(p.dup),
-                    show_bytes(p.payload)
+                    show_payload(p.payload)
                 )
             }
             Packet::Subscribe(s) => {
@@ -195,5 +222,36 @@ mod tests {
         // 0xff n'est jamais valide en UTF-8 : affichage hexadécimal.
         let buf = [0x30, 0x05, 0x00, 0x01, b't', 0xff, 0x00];
         assert!(complete(&buf).0.describe(false).contains("payload=0xff00"));
+    }
+
+    #[test]
+    fn un_gros_payload_texte_est_tronque_a_l_affichage() {
+        // PUBLISH QoS 0, topic "t", payload de 200 'a' (Remaining Length 203).
+        let mut buf = vec![0x30, 0xcb, 0x01, 0x00, 0x01, b't'];
+        buf.extend(std::iter::repeat_n(b'a', 200));
+        let line = complete(&buf).0.describe(false);
+        let attendu = format!("payload=\"{}\"… (200 octets au total)", "a".repeat(64));
+        assert!(line.ends_with(&attendu), "{line}");
+    }
+
+    #[test]
+    fn la_troncature_ne_coupe_pas_un_caractere_en_deux() {
+        // 63 'a' puis 'é' (2 octets) : couper à 64 couperait le 'é'.
+        let mut payload = "a".repeat(63);
+        payload.push_str("éé");
+        let mut buf = vec![0x30, (3 + payload.len()) as u8, 0x00, 0x01, b't'];
+        buf.extend_from_slice(payload.as_bytes());
+        let line = complete(&buf).0.describe(false);
+        let attendu = format!("payload=\"{}\"… (67 octets au total)", "a".repeat(63));
+        assert!(line.ends_with(&attendu), "{line}");
+    }
+
+    #[test]
+    fn un_gros_payload_binaire_est_tronque_en_hexadecimal() {
+        let mut buf = vec![0x30, 0x67, 0x00, 0x01, b't'];
+        buf.extend(std::iter::repeat_n(0xffu8, 100));
+        let line = complete(&buf).0.describe(false);
+        let attendu = format!("payload=0x{}… (100 octets au total)", "ff".repeat(64));
+        assert!(line.ends_with(&attendu), "{line}");
     }
 }

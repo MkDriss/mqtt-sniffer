@@ -2,7 +2,8 @@
 //!
 //! Ce module ne dépend PAS de libpcap : il reçoit des octets (`&[u8]`) et
 //! renvoie des informations structurées. On peut donc le tester sans réseau
-//! ni privilèges (voir les tests en bas de fichier)
+//! ni privilèges (voir les tests en bas de fichier), et d'autres outils
+//! peuvent le réutiliser tel quel, quelle que soit l'origine des octets.
 
 use std::fmt;
 use std::net::IpAddr;
@@ -148,8 +149,9 @@ pub fn parse_ethernet(frame: &[u8]) -> Result<Parsed<'_>, ParseError> {
 
 // ---------------------------------------------------------------------------
 // Tests unitaires : lancés avec `cargo test`, sans réseau ni privilèges.
-// Les trames ci-dessous sont des copies EXACTES de la capture réalisées auparavant
-// (paquets #1 et #18). `#[cfg(test)]` : ce code n'est compilé que pour les tests.
+// Les trames ci-dessous sont des copies EXACTES d'une capture réelle sur
+// l'interface loopback (broker Mosquitto local, clients mosquitto_sub et
+// mosquitto_pub). `#[cfg(test)]` : ce code n'est compilé que pour les tests.
 // ---------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {

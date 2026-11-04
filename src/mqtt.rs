@@ -29,6 +29,7 @@
 //! | `publish.rs`     | PUBLISH et ses acquittements PUBACK/PUBREC/PUBREL/PUBCOMP    |
 //! | `subscribe.rs`   | SUBSCRIBE, SUBACK, UNSUBSCRIBE, UNSUBACK (spec §3.8-3.11)    |
 //! | `display.rs`     | affichage sécurisé (`describe`, neutralisation CWE-150)      |
+//! | `stream.rs`      | [`StreamDecoder`] : messages d'un flux d'octets (réassemblé)  |
 //!
 //! Les sous-modules sont privés : le reste du programme n'utilise que les
 //! éléments ré-exportés ci-dessous (`pub use`).
@@ -40,6 +41,7 @@ mod error;
 mod packet;
 mod publish;
 mod reader;
+mod stream;
 mod subscribe;
 mod types;
 
@@ -51,6 +53,7 @@ pub use decode::decode;
 pub use error::MqttError;
 pub use packet::{Decoded, Packet};
 pub use publish::{PubAck, PubComp, PubRec, PubRel, Publish};
+pub use stream::{MemoryBudget, StreamConfig, StreamDecoder, StreamEvent};
 pub use subscribe::{SubAck, Subscribe, UnsubAck, Unsubscribe};
 pub use types::{PacketType, QoS};
 

@@ -159,6 +159,28 @@ le FIN consomme un numéro de séquence (observable dans une capture).
 port destination) qui identifie de façon unique une connexion TCP.
 *(explication personnelle)*
 
+**Flux (sens de connexion)** — Les octets envoyés par une extrémité d'une
+connexion TCP à l'autre. Une connexion en comporte deux, indépendants, chacun
+avec ses propres numéros de séquence (`FlowKey` dans `src/tcp.rs`).
+*(explication personnelle)*
+
+**Retransmission** — Nouvel envoi de données déjà envoyées, en l'absence
+d'acquittement ; ses octets déjà reçus sont ignorés par le réassemblage.
+*(explication personnelle)*
+
+**Trou (gap)** — Octets d'un flux jamais observés, parce qu'un segment manque
+ou arrive en retard ; le réassemblage reprend au segment suivant.
+*(explication personnelle)*
+
+**Arithmétique modulo 2³²** — Les numéros de séquence font 32 bits et
+repassent par zéro ; on les compare par différence modulo 2³²
+(`wrapping_sub` en Rust) [RFC9293].
+
+**Réinitialisation aveugle (blind reset)** — Attaque qui coupe une connexion
+avec un RST forgé. Depuis la RFC 5961, un RST n'est accepté que si son numéro
+de séquence est exactement le prochain attendu ; sinon le destinataire
+répond par un *challenge ACK* [RFC5961] [LINUX-RFC5961].
+
 **Data offset** — Longueur de l'en-tête TCP en mots de 32 bits ; indique où
 commencent les données [RFC9293].
 
@@ -408,6 +430,14 @@ personnelle, comportement vérifié par test)*
 réintroduit volontairement le défaut et on contrôle que le test échoue.
 *(explication personnelle)*
 
+**Closure** — Fonction anonyme, qu'on peut passer en argument à une autre
+fonction (comme une lambda en Java). `StreamDecoder::feed` reçoit une closure
+qu'il appelle pour chaque événement observé. *(explication personnelle)*
+
+**`const` (constante)** — Valeur fixée à la compilation et recopiée à chaque
+endroit où elle est utilisée : deux références à la même constante n'ont pas
+forcément la même adresse mémoire [RUST-REF-CONST].
+
 **Test unitaire** — Fonction `#[test]` placée dans un module `#[cfg(test)]`
 du même fichier, compilée seulement par `cargo test` [RUST-BOOK, ch. 11.3].
 
@@ -462,6 +492,23 @@ d'octets. En MQTT, c'est le champ Remaining Length qui le permet [MQTT, §2.2.3]
 d'octets transporté par plusieurs segments, afin d'y appliquer le framing.
 *(explication personnelle)*
 
+**Resynchronisation** — Recherche du début d'un message dans un flux dont on
+a perdu le découpage (après un trou, ou sur un flux pris en cours de route) :
+chaque nouveau bloc est essayé depuis son début, et le premier message complet
+décodé rétablit le flux. C'est une heuristique. *(explication personnelle)*
+
+**Budget mémoire** — Quantité totale de mémoire que l'ensemble des décodeurs
+peut utiliser pour garder des messages incomplets (`MemoryBudget`) ; il borne
+la mémoire consommée quelles que soient les données reçues. *(explication
+personnelle)*
+
+**Événement** — Constat signalé par l'analyse (message MQTT décodé, trou,
+fermeture de flux, anomalie...) ; l'appelant décide quoi en faire, par
+exemple l'afficher (`analyzer::Event`). *(explication personnelle)*
+
+**Horodatage de capture** — Instant de capture d'une trame, fourni par
+libpcap avec la précision de la microseconde [PCAP-RS].
+
 ---
 
 ## Sources
@@ -476,6 +523,8 @@ d'octets transporté par plusieurs segments, afin d'y appliquer le framing.
 - **[HARRIS-LO]** G. Harris, « BAD TCP CHECKSUM in loopback interface », wireshark-users, 2008. https://lists.wireshark.org/archives/wireshark-users/200801/msg00031.html
 - **[IANA-TCP]** IANA, « Transmission Control Protocol (TCP) Parameters ». https://www.iana.org/assignments/tcp-parameters
 - **[KERNEL-BPF]** Linux kernel documentation, « Linux Socket Filtering aka Berkeley Packet Filter (BPF) ». https://docs.kernel.org/networking/filter.html
+- **[RFC5961]** A. Ramaiah, R. Stewart, M. Dalal, RFC 5961, *Improving TCP's Robustness to Blind In-Window Attacks*, 2010. https://www.rfc-editor.org/rfc/rfc5961
+- **[LINUX-RFC5961]** E. Dumazet, « tcp: implement RFC 5961 3.2 », correctif du noyau Linux, netdev, juillet 2012. https://lore.kernel.org/netdev/20120717.013634.138750003911972637.davem@davemloft.net/T/
 - **[MOSQ-2]** Eclipse Mosquitto, « Migrating from 1.x to 2.0 ». https://mosquitto.org/documentation/migrating-to-2-0/
 - **[MQTT]** OASIS, *MQTT Version 3.1.1*, A. Banks, R. Gupta (éd.), 2014. https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html
 - **[PACKET7]** packet(7), Linux man-pages. https://man7.org/linux/man-pages/man7/packet.7.html
@@ -488,6 +537,7 @@ d'octets transporté par plusieurs segments, afin d'y appliquer le framing.
 - **[RFC9293]** W. Eddy (éd.), RFC 9293, *Transmission Control Protocol (TCP)*, 2022. https://www.rfc-editor.org/rfc/rfc9293
 - **[RUST-BOOK]** S. Klabnik, C. Nichols, *The Rust Programming Language*. https://doc.rust-lang.org/book/
 - **[RUST-BY-EXAMPLE]** *Rust by Example*, « let-else ». https://doc.rust-lang.org/stable/rust-by-example/flow_control/let_else.html
+- **[RUST-REF-CONST]** *The Rust Reference*, « Constant items ». https://doc.rust-lang.org/reference/items/constant-items.html
 - **[RUST-STD-STR]** Documentation de la bibliothèque standard Rust, type primitif `str`. https://doc.rust-lang.org/std/primitive.str.html
 - **[RUST-STD-TODO]** Documentation de la bibliothèque standard Rust, macro `todo!`. https://doc.rust-lang.org/std/macro.todo.html
 - **[SETCAP-REBUILD]** Source secondaire : README de projets Rust tiers (ex. rawgrep) signalant la perte des capabilities à la recompilation. https://docs.rs/crate/rawgrep/latest/source/README.md

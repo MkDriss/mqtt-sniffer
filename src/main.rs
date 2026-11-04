@@ -1,13 +1,17 @@
-//! mqtt-sniffer
+//! mqtt-sniffer : interface en ligne de commande.
 //!
-//! Ce fichier n'est qu'une interface en ligne de commande : toute la logique
-//! vit dans la bibliothèque (`src/lib.rs`), importée ci-dessous.
+//! Capture le trafic, confie chaque segment TCP à l'analyseur de la
+//! bibliothèque et affiche les événements observés. Toute la logique est dans
+//! la bibliothèque (`src/lib.rs`) ; ce fichier ne fait que capturer et afficher.
+
+use std::time::Duration;
 
 use clap::Parser as ClapParser; // renommé pour éviter la confusion avec notre module `parser`
-use mqtt_sniffer::{capture, mqtt, parser};
+use mqtt_sniffer::analyzer::{Analyzer, Config, Event};
+use mqtt_sniffer::{capture, parser};
 use pcap::Linktype;
 
-/// Sniffer défensif MQTT (pédagogique).
+/// Sniffer défensif MQTT : décode le trafic MQTT 3.1.1 en clair.
 #[derive(ClapParser, Debug)]
 #[command(name = "mqtt-sniffer", version, about)]
 struct Args {
@@ -19,17 +23,17 @@ struct Args {
     #[arg(short, long, default_value = "tcp port 1883")]
     filter: String,
 
-    /// Nombre de paquets à capturer avant de s'arrêter (0 = illimité)
+    /// Nombre de trames à capturer avant de s'arrêter (0 = illimité)
     #[arg(short, long, default_value_t = 0)]
     count: u64,
 
-    /// Affiche aussi le payload TCP en hexadécimal
+    /// Affiche aussi chaque segment TCP capturé (mode détaillé)
+    #[arg(long)]
+    segments: bool,
+
+    /// Affiche le contenu de chaque segment en hexadécimal (implique --segments)
     #[arg(long)]
     hex: bool,
-
-    /// N'affiche que les segments qui transportent des données (masque les ACK seuls)
-    #[arg(long)]
-    mqtt_only: bool,
 
     /// Affiche les mots de passe MQTT en clair (masqués par défaut)
     #[arg(long)]
@@ -69,16 +73,23 @@ fn main() -> Result<(), pcap::Error> {
         args.interface, args.filter
     );
 
+    let mut analyzer = Analyzer::new(Config::default());
+    // Horodatage de la première trame : les temps affichés lui sont relatifs.
+    let mut start: Option<Duration> = None;
     let mut seen: u64 = 0;
+
     loop {
         match cap.next_packet() {
             Ok(packet) => {
                 seen += 1;
-                handle_frame(seen, packet.data, &args);
+                let now = timestamp(packet.header);
+                let elapsed = now.saturating_sub(*start.get_or_insert(now));
+                handle_frame(&mut analyzer, packet.data, now, elapsed, &args);
                 if args.count != 0 && seen >= args.count {
                     break;
                 }
             }
+            // Pas de trame pendant le délai d'attente : ce n'est pas une erreur.
             Err(pcap::Error::TimeoutExpired) => continue,
             Err(e) => return Err(e),
         }
@@ -86,82 +97,73 @@ fn main() -> Result<(), pcap::Error> {
     Ok(())
 }
 
-/// Parse une trame et affiche une ligne de résumé, puis les messages MQTT.
+/// Horodatage de capture fourni par libpcap, converti en `Duration`
+/// (temps écoulé depuis le 1er janvier 1970).
+fn timestamp(header: &pcap::PacketHeader) -> Duration {
+    // Les champs de `timeval` sont signés ; une valeur négative est impossible
+    // en pratique, et serait remplacée par 0 plutôt que de faire paniquer.
+    let secs = u64::try_from(header.ts.tv_sec).unwrap_or(0);
+    let micros = u32::try_from(header.ts.tv_usec).unwrap_or(0).min(999_999);
+    Duration::new(secs, micros * 1000)
+}
+
+/// Parse une trame, l'affiche si demandé, puis la confie à l'analyseur.
 ///
 /// Une trame malformée n'arrête PAS le programme : pour un outil défensif,
-/// un paquet bizarre est une information (peut-être une attaque), pas une
-/// raison de planter.
-fn handle_frame(n: u64, frame: &[u8], args: &Args) {
+/// un paquet bizarre est une information, pas une raison de planter.
+fn handle_frame(
+    analyzer: &mut Analyzer,
+    frame: &[u8],
+    now: Duration,
+    elapsed: Duration,
+    args: &Args,
+) {
     match parser::parse_ethernet(frame) {
         Ok(parser::Parsed::Tcp(seg)) => {
-            if args.mqtt_only && seg.payload.is_empty() {
-                return;
+            if args.segments || args.hex {
+                println!(
+                    "[{}] TCP {}:{} -> {}:{}  [{}]  seq={} ack={} len={}",
+                    format_time(elapsed),
+                    seg.src_ip,
+                    seg.src_port,
+                    seg.dst_ip,
+                    seg.dst_port,
+                    seg.flags,
+                    seg.seq,
+                    seg.ack,
+                    seg.payload.len()
+                );
+                if args.hex && !seg.payload.is_empty() {
+                    print_hex(seg.payload);
+                }
             }
-            println!(
-                "#{n:<5} {}:{} -> {}:{}  [{}]  seq={} ack={} len={}",
-                seg.src_ip,
-                seg.src_port,
-                seg.dst_ip,
-                seg.dst_port,
-                seg.flags,
-                seg.seq,
-                seg.ack,
-                seg.payload.len()
-            );
-            if args.hex && !seg.payload.is_empty() {
-                print_hex(seg.payload);
-            }
-            let touches_mqtt = seg.src_port == mqtt::MQTT_PORT || seg.dst_port == mqtt::MQTT_PORT;
-            if touches_mqtt && !seg.payload.is_empty() {
-                let direction = if seg.dst_port == mqtt::MQTT_PORT {
-                    "client -> broker"
-                } else {
-                    "broker -> client"
-                };
-                print_mqtt(seg.payload, direction, args.show_secrets);
-            }
+            analyzer.process(&seg, now, |event| {
+                print_event(elapsed, &event, args.show_secrets)
+            });
         }
-        Ok(parser::Parsed::Other) => {
-            if !args.mqtt_only {
-                println!("#{n:<5} (trame non TCP, ignorée)");
-            }
-        }
-        Err(e) => eprintln!("#{n:<5} [!] {e}"),
+        Ok(parser::Parsed::Other) => {}
+        Err(e) => eprintln!("[{}] [!] {e}", format_time(elapsed)),
     }
 }
 
-/// Décode TOUS les messages MQTT présents dans un payload TCP.
-///
-/// Un segment peut contenir plusieurs messages collés : on avance de
-/// `consumed` octets après chacun. Un message coupé en deux segments est
-
-fn print_mqtt(payload: &[u8], direction: &str, show_secrets: bool) {
-    let mut offset = 0;
-    while offset < payload.len() {
-        match mqtt::decode(&payload[offset..]) {
-            Ok(mqtt::Decoded::Complete { packet, consumed }) => {
-                println!(
-                    "        MQTT {direction} : {}",
-                    packet.describe(show_secrets)
-                );
-                offset += consumed;
-            }
-            Ok(mqtt::Decoded::Incomplete { needed }) => {
-                println!(
-                    "        MQTT {direction} : message incomplet, il manque au moins \
-                     {needed} octet(s)"
-                );
-                break;
-            }
-            Err(e) => {
-                println!("        MQTT {direction} : [ANOMALIE] {e}");
-                break;
-            }
-        }
-    }
+/// Affiche un événement : temps relatif, sens de connexion, description.
+fn print_event(elapsed: Duration, event: &Event<'_>, show_secrets: bool) {
+    let flow = event.flow();
+    println!(
+        "[{}] {} -> {}  {}",
+        format_time(elapsed),
+        flow.src,
+        flow.dst,
+        event.describe(show_secrets)
+    );
 }
 
-/// Hexdump (offset | hex | ASCII)
+/// Temps en secondes, avec la microseconde (même précision que libpcap).
+fn format_time(elapsed: Duration) -> String {
+    format!("{:>11.6}", elapsed.as_secs_f64())
+}
+
+/// Hexdump (offset | hex | ASCII).
 fn print_hex(data: &[u8]) {
     for (i, chunk) in data.chunks(16).enumerate() {
         let hex: Vec<String> = chunk.iter().map(|b| format!("{b:02x}")).collect();
@@ -175,6 +177,11 @@ fn print_hex(data: &[u8]) {
                 }
             })
             .collect();
-        println!("        {:04x}  {:<47}  {}", i * 16, hex.join(" "), ascii);
+        println!(
+            "              {:04x}  {:<47}  {}",
+            i * 16,
+            hex.join(" "),
+            ascii
+        );
     }
 }
