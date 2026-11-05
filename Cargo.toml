@@ -1,18 +1,22 @@
 [package]
 name = "mqtt-sniffer"
-version = "1.0.0"
+version = "0.4.0"
 edition = "2024"
 # Version minimale de Rust : `slice::as_chunks` (src/checksum.rs) date de Rust 1.88.
 rust-version = "1.88"
-description = "Sniffer défensif pédagogique : capture -> Ethernet/IP/TCP -> MQTT"
+description = "Sniffer défensif MQTT 3.1.1 : capture, réassemblage TCP et décodage des messages en clair"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/TON-UTILISATEUR/mqtt-sniffer"
+keywords = ["mqtt", "pcap", "sniffer", "security", "iot"]
+categories = ["command-line-utilities", "network-programming"]
 
 [dependencies]
 # Binding Rust de libpcap (le moteur de capture de tcpdump/Wireshark).
 # Doc : https://docs.rs/pcap
 pcap = "2"
 
-# Parsing des arguments CLI, même choix que pour le scanner de ports.
+# Lecture des options de la ligne de commande.
 clap = { version = "4", features = ["derive"] }
 
 # Découpage zéro-copie des en-têtes Ethernet / IP / TCP.

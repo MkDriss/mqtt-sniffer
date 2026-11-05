@@ -1,0 +1,28 @@
+# Intégration continue : les tests sont lancés à chaque push.
+name: Tests
+
+on: push
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
+    steps:
+      # Action épinglée par empreinte de commit (immuable), version en commentaire.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dépendances système
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+      - name: Toolchain Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Tests unitaires et d'intégration
+        run: cargo test --locked
