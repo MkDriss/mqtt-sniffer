@@ -14,6 +14,7 @@ use std::time::Duration;
 use clap::Parser as ClapParser; // renommé pour éviter la confusion avec notre module `parser`
 use clap::ValueEnum;
 use mqtt_sniffer::analyzer::{Analyzer, ChecksumPolicy, Config, Event};
+use mqtt_sniffer::record::{RecordConfig, RecordNotice, Recorder};
 use mqtt_sniffer::{capture, parser};
 use pcap::{Activated, Capture, Linktype};
 
@@ -28,6 +29,16 @@ struct Args {
     /// Lit un fichier de capture (.pcap) au lieu d'écouter une interface
     #[arg(short, long, value_name = "FICHIER", conflicts_with = "interface")]
     read: Option<PathBuf>,
+
+    /// Enregistre les trames dans ce dossier, en fichiers pcap horodatés
+    #[arg(short, long, value_name = "DOSSIER")]
+    write: Option<PathBuf>,
+
+    /// Taille maximale d'un fichier enregistré, en Mio : au-delà, un nouveau
+    /// fichier commence
+    #[arg(long, value_name = "MIO", default_value_t = 100,
+          value_parser = clap::value_parser!(u64).range(1..))]
+    write_max_mb: u64,
 
     /// Filtre BPF (syntaxe tcpdump)
     #[arg(short, long, default_value = "tcp port 1883")]
@@ -164,6 +175,22 @@ fn run<T: Activated + ?Sized>(
         checksums,
         ..Config::default()
     });
+    let mut recorder = match &args.write {
+        Some(dir) => {
+            let config = RecordConfig {
+                file_max_bytes: args.write_max_mb * 1024 * 1024,
+            };
+            writeln!(
+                out,
+                "[*] Enregistrement dans {} (fichiers de {} Mio au plus, \
+                 lisibles par toi seul)",
+                dir.display(),
+                args.write_max_mb
+            )?;
+            Some(Recorder::new(dir, linktype, config)?)
+        }
+        None => None,
+    };
     // Horodatage de la première trame : les temps affichés lui sont relatifs.
     let mut start: Option<Duration> = None;
     let mut seen: u64 = 0;
@@ -174,6 +201,22 @@ fn run<T: Activated + ?Sized>(
                 seen += 1;
                 let now = capture::timestamp(packet.header);
                 let elapsed = now.saturating_sub(*start.get_or_insert(now));
+                // La trame brute est enregistrée AVANT l'analyse : le fichier
+                // garde aussi les trames malformées.
+                if let Some(rec) = recorder.as_mut() {
+                    match rec.write(&packet) {
+                        Ok(None) => {}
+                        Ok(Some(RecordNotice::FileOpened(path))) => {
+                            writeln!(out, "[*] Nouveau fichier : {}", path.display())?;
+                        }
+                        Err(e) => {
+                            // Disque plein, droits... : on arrête d'enregistrer,
+                            // mais pas d'analyser.
+                            eprintln!("[!] {e} : enregistrement arrêté, l'affichage continue");
+                            recorder = None;
+                        }
+                    }
+                }
                 handle_frame(&mut analyzer, packet.data, now, elapsed, args, out)?;
                 if args.count != 0 && seen >= args.count {
                     break;

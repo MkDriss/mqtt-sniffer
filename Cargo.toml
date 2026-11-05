@@ -1,7 +1,7 @@
 [package]
 name = "mqtt-sniffer"
-version = "1.0.0"
-edition = "2024"
+version = "1.1.0"
+edition = "2021"
 # Version minimale de Rust : `slice::as_chunks` (src/checksum.rs) date de Rust 1.88.
 rust-version = "1.88"
 description = "Sniffer défensif MQTT 3.1.1 : capture, réassemblage TCP et décodage des messages en clair"

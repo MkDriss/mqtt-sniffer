@@ -1,6 +1,6 @@
 # Limitations connues
 
-État de la version 1.0.0. Chaque limitation indique son impact sur ce que le
+État de la version 1.1.0. Chaque limitation indique son impact sur ce que le
 sniffer affiche.
 
 ## Réassemblage TCP
@@ -25,6 +25,14 @@ sniffer affiche.
 | **Seul le type de lien Ethernet est supporté** | L'interface pseudo `any` (en-tête Linux SLL) est refusée au démarrage. |
 | **Port MQTT fixé à 1883 dans la ligne de commande** | Avec un autre filtre BPF, le trafic des autres ports est réassemblé mais pas décodé. Le port est réglable dans la bibliothèque (`analyzer::Config::mqtt_port`), pas encore par une option. |
 | **Limites mémoire non réglables en ligne de commande** | 256 sens de connexion, 1 Mio par message, 64 Mio pour l'ensemble des messages incomplets et 5 minutes d'inactivité : valeurs fixes dans le binaire, réglables seulement dans la bibliothèque (`analyzer::Config`). |
+
+## Enregistrement (`--write`)
+
+| Limitation | Impact |
+|---|---|
+| **La rotation coupe les connexions** | Un nouveau fichier commence dès que la taille est atteinte, même au milieu d'une connexion ou d'un message. Rejoué seul, le fichier suivant commence donc par un flux « pris en cours de route ». Pour rejouer une session complète, il faut fusionner les fichiers dans l'ordre (par exemple avec `mergecap`, fourni avec Wireshark). |
+| **Aucune limite sur l'ensemble des fichiers** | Seule la taille de chaque fichier est limitée (`--write-max-mb`), et aucun fichier n'est supprimé automatiquement : un enregistrement de très longue durée peut remplir le disque. Si le disque est plein, l'enregistrement s'arrête avec un message, et l'affichage continue. |
+| **Droits d'un dossier existant inchangés** | Le dossier est créé en `0700` seulement s'il n'existe pas. Les fichiers restent en `0600` dans tous les cas, mais leurs noms sont visibles si le dossier est plus ouvert. |
 
 ## Affichage
 

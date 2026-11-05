@@ -1,12 +1,17 @@
 //! Fabrication de captures réseau de test (scénarios), au format pcap.
 //!
-//! Partagé par les tests d'intégration (`tests/replay.rs`) et par l'exemple
+//! Ce module est compilé séparément dans chaque test d'intégration, qui n'en
+//! utilise qu'une partie : d'où l'autorisation de code inutilisé ci-dessous.
+//!
+//! Partagé par les tests d'intégration (`tests/replay.rs`, `tests/record.rs`) et par l'exemple
 //! `examples/scenarios.rs`, qui écrit ces captures sur le disque pour pouvoir
 //! les rejouer avec `mqtt-sniffer --read`.
 //!
 //! Les trames sont construites avec le `PacketBuilder` d'etherparse, qui
 //! calcule les longueurs et les checksums IP et TCP : ce sont des trames
 //! Ethernet → IPv4 → TCP parfaitement valides.
+
+#![allow(dead_code)]
 
 use std::fs::File;
 use std::io::{self, Write};
