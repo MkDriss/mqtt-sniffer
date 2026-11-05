@@ -1,4 +1,5 @@
-# Livraison continue : pousser un tag `vX.Y.Z` teste, compile et publie une release GitHub avec les binaires x86_64 et arm64
+# Livraison continue : pousser un tag `vX.Y.Z` teste, compile et publie une
+# release GitHub avec les binaires x86_64 et arm64 (Raspberry Pi 64 bits).
 name: Release
 
 on:
@@ -12,6 +13,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Les tests sont ceux de test.yaml, réutilisés tels quels, sur les deux
+  # machines qui compilent ensuite les binaires.
   tests:
     name: Tests
     strategy:
@@ -21,12 +24,14 @@ jobs:
     with:
       runner: ${{ matrix.runner }}
 
-  binaries:
+  binaires:
     name: Binaire ${{ matrix.target }}
     needs: tests # aucune compilation si un test échoue
     strategy:
       matrix:
         include:
+          # Ubuntu 22.04 : une glibc plus ancienne, pour que le binaire tourne
+          # aussi sur des distributions un peu plus anciennes.
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - runner: ubuntu-22.04-arm
@@ -45,27 +50,27 @@ jobs:
       - name: Compilation optimisée
         run: cargo build --release --locked
       - name: Archive et empreinte SHA-256
-        
-       # Les valeurs passent par des variables d'env pour limiter les risques d'injection de commande.
+        # Les valeurs venant de GitHub passent par des variables d'environnement,
+        # jamais par ${{ }} directement dans le script (injection de commandes).
         env:
           TAG: ${{ github.ref_name }}
           TARGET: ${{ matrix.target }}
         run: |
-          name="mqtt-sniffer-${TAG}-${TARGET}"
+          name="rnifler-${TAG}-${TARGET}"
           mkdir "$name"
-          cp target/release/mqtt-sniffer README.md LICENSE "$name"/
+          cp target/release/rnifler README.md LICENSE-MIT LICENSE-APACHE "$name"/
           cp -r docs "$name"/
           tar czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.target }}
-          path: mqtt-sniffer-*.tar.gz*
+          path: rnifler-*.tar.gz*
           if-no-files-found: error
 
   publication:
     name: Publication de la release
-    needs: binaries
+    needs: binaires
     runs-on: ubuntu-24.04
     permissions:
       contents: write # seul ce job peut créer la release

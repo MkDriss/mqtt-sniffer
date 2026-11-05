@@ -1,0 +1,13 @@
+# Dependabot propose chaque semaine une pull request quand une dépendance Rust
+# ou une action GitHub a une nouvelle version (il met aussi à jour les
+# empreintes de commit des actions épinglées). La CI vérifie chaque proposition.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
