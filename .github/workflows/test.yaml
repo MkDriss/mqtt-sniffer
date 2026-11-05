@@ -1,0 +1,41 @@
+# Tests du projet. Ce workflow sert à deux choses :
+# - il se lance à chaque push sur une branche ;
+# - il est réutilisable : release.yml l'appelle avant de compiler une release.
+name: Tests
+
+on:
+  push:
+    # Branches uniquement : sur un tag, c'est release.yml qui lance les tests.
+    branches: ["**"]
+  workflow_call:
+    inputs:
+      runner:
+        description: Machine GitHub sur laquelle lancer les tests
+        type: string
+        default: ubuntu-24.04
+
+# Moindre privilège : le jeton du workflow ne peut que lire le dépôt.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    # Sur un push, `inputs` est vide : on retombe sur ubuntu-24.04.
+    name: Tests (${{ inputs.runner || 'ubuntu-24.04' }})
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
+    steps:
+      # Action épinglée par empreinte de commit (immuable), version en commentaire.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dépendances système
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+      - name: Toolchain Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Tests unitaires et d'intégration
+        run: cargo test --locked

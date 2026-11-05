@@ -1,0 +1,81 @@
+# Livraison continue : pousser un tag `vX.Y.Z` teste, compile et publie une release GitHub avec les binaires x86_64 et arm64
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    name: Tests
+    strategy:
+      matrix:
+        runner: [ubuntu-22.04, ubuntu-22.04-arm]
+    uses: ./.github/workflows/test.yaml
+    with:
+      runner: ${{ matrix.runner }}
+
+  binaries:
+    name: Binaire ${{ matrix.target }}
+    needs: tests # aucune compilation si un test échoue
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dépendances système
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+      - name: Toolchain Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Compilation optimisée
+        run: cargo build --release --locked
+      - name: Archive et empreinte SHA-256
+        
+       # Les valeurs passent par des variables d'env pour limiter les risques d'injection de commande.
+        env:
+          TAG: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          name="mqtt-sniffer-${TAG}-${TARGET}"
+          mkdir "$name"
+          cp target/release/mqtt-sniffer README.md LICENSE "$name"/
+          cp -r docs "$name"/
+          tar czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: mqtt-sniffer-*.tar.gz*
+          if-no-files-found: error
+
+  publication:
+    name: Publication de la release
+    needs: binaries
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # seul ce job peut créer la release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Création de la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
