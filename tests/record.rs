@@ -9,16 +9,16 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use mqtt_sniffer::capture;
-use mqtt_sniffer::record::{format_utc_millis, RecordConfig, RecordNotice, Recorder};
 use pcap::{Capture, Linktype};
+use rnifler::capture;
+use rnifler::record::{format_utc_millis, RecordConfig, RecordNotice, Recorder};
 
 /// Une trame relue : son horodatage et ses octets.
 type Trame = (Duration, Vec<u8>);
 
 /// Dossier temporaire propre à un test (supprimé s'il existait déjà).
 fn dossier_temporaire(nom: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mqtt-sniffer-rec-{}-{nom}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("rnifler-rec-{}-{nom}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     dir
 }

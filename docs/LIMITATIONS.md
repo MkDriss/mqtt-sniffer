@@ -62,6 +62,6 @@ sniffer affiche.
   la vérification des checksums (`checksum`, `analyzer::ChecksumPolicy`) ;
   démontré par le scénario `insertion-checksum`, rejoué avec et sans
   vérification.
-- **Panique sur un tube fermé.** `mqtt-sniffer ... | head` provoquait une
+- **Panique sur un tube fermé.** `rnifler ... | head` provoquait une
   panique (« Broken pipe ») quand `head` avait fini de lire. Le sniffer
   s'arrête désormais sans erreur.

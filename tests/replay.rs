@@ -6,8 +6,8 @@ mod common;
 
 use std::path::PathBuf;
 
-use mqtt_sniffer::analyzer::{Analyzer, ChecksumPolicy, Config};
-use mqtt_sniffer::{capture, parser};
+use rnifler::analyzer::{Analyzer, ChecksumPolicy, Config};
+use rnifler::{capture, parser};
 
 /// Écrit le scénario `name` dans un fichier pcap temporaire, le relit avec
 /// `capture::open_offline` et renvoie la description de chaque événement.
@@ -22,7 +22,7 @@ fn rejouer_avec(name: &str, checksums: ChecksumPolicy) -> Vec<String> {
         .find(|s| s.name == name)
         .expect("scénario inconnu");
     let path: PathBuf =
-        std::env::temp_dir().join(format!("mqtt-sniffer-{}-{name}.pcap", std::process::id()));
+        std::env::temp_dir().join(format!("rnifler-{}-{name}.pcap", std::process::id()));
     common::write_pcap(&path, &scenario.frames).expect("écriture du pcap");
 
     let mut cap = capture::open_offline(&path, "tcp port 1883").expect("lecture du pcap");

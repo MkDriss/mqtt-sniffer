@@ -1,4 +1,4 @@
-# Glossaire du projet mqtt-sniffer
+# Glossaire du projet rnifler
 
 Termes techniques utilisés dans le code et la documentation du projet,
 classés par thème.
@@ -367,7 +367,8 @@ au plus une bibliothèque, autant de binaires que voulu [RUST-BOOK, ch. 7.1].
 [RUST-BOOK, ch. 7].
 
 **Nom du crate bibliothèque** — Nom du package avec les tirets remplacés par
-des underscores : `mqtt-sniffer` → `mqtt_sniffer` [CARGO-TARGETS].
+des underscores : un package `mon-outil` donne la bibliothèque `mon_outil` ;
+`rnifler`, sans tiret, garde son nom [CARGO-TARGETS].
 
 **Ownership / move** — Chaque valeur a un unique propriétaire ; passer une
 valeur par valeur (`self`) la *déplace*, l'ancienne variable devient
@@ -480,7 +481,7 @@ l'opérateur `?` y convertit automatiquement une `pcap::Error` comme une
 `io::Error`. *(explication personnelle)*
 
 **Tube fermé (broken pipe)** — Erreur reçue en écrivant dans un tube dont le
-lecteur s'est arrêté (`mqtt-sniffer ... | head`) ; le sniffer la traite comme
+lecteur s'est arrêté (`rnifler ... | head`) ; le sniffer la traite comme
 une fin normale. *(explication personnelle)*
 
 **Version minimale de Rust (MSRV)** — Plus ancienne version du compilateur

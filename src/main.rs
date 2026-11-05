@@ -1,4 +1,4 @@
-//! mqtt-sniffer : interface en ligne de commande.
+//! rnifler : interface en ligne de commande.
 //!
 //! Capture le trafic (interface ou fichier), confie chaque segment TCP à
 //! l'analyseur de la bibliothèque et affiche les événements observés. Toute la
@@ -13,14 +13,14 @@ use std::time::Duration;
 
 use clap::Parser as ClapParser; // renommé pour éviter la confusion avec notre module `parser`
 use clap::ValueEnum;
-use mqtt_sniffer::analyzer::{Analyzer, ChecksumPolicy, Config, Event};
-use mqtt_sniffer::record::{RecordConfig, RecordNotice, Recorder};
-use mqtt_sniffer::{capture, parser};
 use pcap::{Activated, Capture, Linktype};
+use rnifler::analyzer::{Analyzer, ChecksumPolicy, Config, Event};
+use rnifler::record::{RecordConfig, RecordNotice, Recorder};
+use rnifler::{capture, parser};
 
 /// Sniffer défensif MQTT : décode le trafic MQTT 3.1.1 en clair.
 #[derive(ClapParser, Debug)]
-#[command(name = "mqtt-sniffer", version, about)]
+#[command(name = "rnifler", version, about)]
 struct Args {
     /// Interface à écouter (ex. lo, wlp3s0, eth0)
     #[arg(short, long, default_value = "lo")]
@@ -87,7 +87,7 @@ enum ChecksumMode {
     Off,
 }
 
-/// Point d'entrée. Un « tube fermé » (par exemple `mqtt-sniffer | head`) n'est
+/// Point d'entrée. Un « tube fermé » (par exemple `rnifler | head`) n'est
 /// pas une erreur : le lecteur a simplement fini, on s'arrête sans bruit.
 fn main() -> Result<(), Box<dyn Error>> {
     match run_cli() {

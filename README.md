@@ -1,6 +1,9 @@
-# mqtt-sniffer
+# rnifler
 
-[![Tests](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/test.yaml/badge.svg)](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/test.yaml)
+*rnifler* vient de « renifleur », la traduction française de *sniffer*, avec
+le **r** de Rust.
+
+[![Tests](https://github.com/MkDriss/rnifler/actions/workflows/test.yaml/badge.svg)](https://github.com/MkDriss/rnifler/actions/workflows/test.yaml)
 
 Sniffer **défensif** pour MQTT 3.1.1, écrit en Rust : il capture le trafic
 d'un broker, reconstitue les flux TCP et décode chaque message en clair
@@ -11,7 +14,7 @@ bibliothèque MQTT, et chaque violation de la spécification est signalée avec
 la référence de l'exigence concernée.
 
 ```text
-$ mqtt-sniffer --read capture.pcap
+$ rnifler --read capture.pcap
 [*] Lecture de capture.pcap | filtre BPF : "tcp port 1883"
 [*] Checksums non vérifiés (fichier : précise --local-ip, ou --checksums all si la capture vient d'une machine tierce)
 [   0.000000] 127.0.0.1:45892 -> 127.0.0.1:1883  ouverture du flux (SYN)
@@ -55,13 +58,13 @@ bibliothèque libpcap avec ses en-têtes.
 sudo dnf install libpcap-devel        # Fedora
 sudo apt install libpcap-dev          # Debian, Ubuntu, Raspberry Pi OS
 
-git clone https://github.com/TON-UTILISATEUR/mqtt-sniffer.git
-cd mqtt-sniffer
+git clone https://github.com/MkDriss/rnifler.git
+cd rnifler
 cargo build --release
 ```
 
 Des binaires précompilés (x86_64 et arm64) sont attachés à chaque
-[release](https://github.com/TON-UTILISATEUR/mqtt-sniffer/releases), avec leur
+[release](https://github.com/MkDriss/rnifler/releases), avec leur
 empreinte SHA-256. Ils sont compilés sous Ubuntu et liés à la bibliothèque
 `libpcap.so.0.8` des distributions Debian et Ubuntu ; sous Fedora, compile
 depuis les sources.
@@ -72,7 +75,7 @@ La capture en direct demande la capability `CAP_NET_RAW`. Plutôt que de
 lancer tout le programme en root, on peut l'attribuer au seul binaire :
 
 ```bash
-sudo setcap cap_net_raw=eip target/release/mqtt-sniffer
+sudo setcap cap_net_raw=eip target/release/rnifler
 ```
 
 Elle est perdue à chaque recompilation : il faut alors relancer `setcap`.
@@ -80,11 +83,11 @@ Elle est perdue à chaque recompilation : il faut alors relancer `setcap`.
 ## Utilisation
 
 ```bash
-mqtt-sniffer -i wlan0                         # capture en direct
-mqtt-sniffer --read capture.pcap              # rejoue un fichier
-mqtt-sniffer --read capture.pcap --local-ip 192.168.1.10
-mqtt-sniffer -i lo --segments --hex           # détail de chaque segment TCP
-mqtt-sniffer -i wlan0 -w captures/            # afficher et enregistrer en pcap
+rnifler -i wlan0                         # capture en direct
+rnifler --read capture.pcap              # rejoue un fichier
+rnifler --read capture.pcap --local-ip 192.168.1.10
+rnifler -i lo --segments --hex           # détail de chaque segment TCP
+rnifler -i wlan0 -w captures/            # afficher et enregistrer en pcap
 ```
 
 | Option | Rôle |

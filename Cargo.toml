@@ -1,13 +1,13 @@
 [package]
-name = "mqtt-sniffer"
+name = "rnifler"
 version = "1.1.0"
 edition = "2021"
 # Version minimale de Rust : `slice::as_chunks` (src/checksum.rs) date de Rust 1.88.
 rust-version = "1.88"
-description = "Sniffer défensif MQTT 3.1.1 : capture, réassemblage TCP et décodage des messages en clair"
+description = "rnifler, le renifleur : sniffer MQTT 3.1.1 défensif en Rust (capture, réassemblage TCP, décodage)"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/TON-UTILISATEUR/mqtt-sniffer"
+repository = "https://github.com/MkDriss/rnifler"
 keywords = ["mqtt", "pcap", "sniffer", "security", "iot"]
 categories = ["command-line-utilities", "network-programming"]
 

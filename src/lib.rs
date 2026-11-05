@@ -1,4 +1,4 @@
-//! Bibliothèque `mqtt_sniffer` : la logique réutilisable du projet.
+//! Bibliothèque `rnifler` : la logique réutilisable du projet.
 //!
 //! Le package contient deux crates :
 //! - ce crate bibliothèque (`src/lib.rs`), réutilisable par d'autres outils ;

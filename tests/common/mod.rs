@@ -5,7 +5,7 @@
 //!
 //! Partagé par les tests d'intégration (`tests/replay.rs`, `tests/record.rs`) et par l'exemple
 //! `examples/scenarios.rs`, qui écrit ces captures sur le disque pour pouvoir
-//! les rejouer avec `mqtt-sniffer --read`.
+//! les rejouer avec `rnifler --read`.
 //!
 //! Les trames sont construites avec le `PacketBuilder` d'etherparse, qui
 //! calcule les longueurs et les checksums IP et TCP : ce sont des trames
