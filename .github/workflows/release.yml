@@ -58,7 +58,7 @@ jobs:
         run: |
           name="rnifler-${TAG}-${TARGET}"
           mkdir "$name"
-          cp target/release/rnifler README.md LICENSE-MIT LICENSE-APACHE "$name"/
+          cp target/release/rnifler README.md LICENSE "$name"/
           cp -r docs "$name"/
           tar czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
