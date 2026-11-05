@@ -1,5 +1,7 @@
 # mqtt-sniffer
 
+[![Tests](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/test.yaml/badge.svg)](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/test.yaml)
+
 Sniffer **défensif** pour MQTT 3.1.1, écrit en Rust : il capture le trafic
 d'un broker, reconstitue les flux TCP et décode chaque message en clair
 (connexions, publications, abonnements, acquittements).
@@ -53,7 +55,7 @@ bibliothèque libpcap avec ses en-têtes.
 sudo dnf install libpcap-devel        # Fedora
 sudo apt install libpcap-dev          # Debian, Ubuntu, Raspberry Pi OS
 
-git clone https://github.com/MkDriss/mqtt-sniffer.git
+git clone https://github.com/TON-UTILISATEUR/mqtt-sniffer.git
 cd mqtt-sniffer
 cargo build --release
 ```
@@ -82,12 +84,15 @@ mqtt-sniffer -i wlan0                         # capture en direct
 mqtt-sniffer --read capture.pcap              # rejoue un fichier
 mqtt-sniffer --read capture.pcap --local-ip 192.168.1.10
 mqtt-sniffer -i lo --segments --hex           # détail de chaque segment TCP
+mqtt-sniffer -i wlan0 -w captures/            # afficher et enregistrer en pcap
 ```
 
 | Option | Rôle |
 |---|---|
 | `-i, --interface` | interface à écouter (`lo` par défaut) |
 | `-r, --read` | lit un fichier de capture au lieu d'une interface |
+| `-w, --write` | enregistre les trames dans ce dossier, en fichiers pcap horodatés |
+| `--write-max-mb` | taille maximale d'un fichier enregistré, en Mio (100 par défaut) |
 | `-f, --filter` | filtre BPF, syntaxe tcpdump (`tcp port 1883` par défaut) |
 | `-c, --count` | s'arrête après N trames |
 | `--segments` | affiche aussi chaque segment TCP |
@@ -105,6 +110,14 @@ l'*offload*, et l'interface loopback ne calcule jamais le checksum TCP. En
 mode `auto`, le sniffer vérifie donc les paquets reçus par les adresses de
 l'interface, ne vérifie rien sur loopback, et ne vérifie un fichier que si
 `--local-ip` est précisé.
+
+**Enregistrement.** Avec `--write`, chaque trame est enregistrée brute, avant
+l'analyse, dans des fichiers nommés d'après l'horodatage UTC de leur première
+trame, à la milliseconde (`capture-2026-11-05T17-12-30.123Z.pcap`). Un nouveau
+fichier commence dès que le fichier courant atteint `--write-max-mb` Mio
+(100 par défaut). Une capture MQTT sans TLS contient les identifiants en
+clair : le dossier est créé en `0700`, les fichiers en `0600`, et aucun
+fichier existant n'est jamais écrasé.
 
 ### Scénarios de test rejouables
 
@@ -194,4 +207,4 @@ La liste complète des sources est à la fin du [glossaire](docs/GLOSSAIRE.md).
 
 ## Licence
 
-Licence [MIT](LICENSE)
+Au choix, sous licence [MIT](LICENSE-MIT) ou [Apache 2.0](LICENSE-APACHE).

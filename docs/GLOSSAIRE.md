@@ -46,6 +46,20 @@ pour le Wi-Fi, `enp0s31f6` pour l'Ethernet, `lo` pour le loopback).
 24 octets (nombre magique `0xa1b2c3d4`, type de lien...), puis chaque trame
 précédée d'un en-tête de 16 octets (horodatage, longueurs) [PCAP-SAVEFILE].
 
+**Rotation de fichiers** — Passage à un nouveau fichier de capture quand le
+fichier courant atteint une taille donnée (`--write-max-mb`), pour garder des
+fichiers de taille raisonnable. *(explication personnelle)*
+
+**Droits Unix `0600` / `0700`** — Droits d'accès en notation octale : `6`
+(lecture et écriture) ou `7` (avec exécution, nécessaire pour entrer dans un
+dossier) pour le propriétaire, `0` (aucun droit) pour le groupe et les autres
+utilisateurs. *(explication personnelle)*
+
+**UTC** — Temps universel coordonné : heure de référence sans fuseau horaire
+ni heure d'été, utilisée dans les noms de fichiers pour qu'ils restent uniques
+et triables. Le calcul de la date utilise l'algorithme `civil_from_days` de
+Howard Hinnant [HINNANT-DATES]. *(explication personnelle pour la définition)*
+
 **Loopback (`lo`)** — Interface virtuelle qui relie la machine à elle-même
 (adresse 127.0.0.1). Sous Linux, elle fournit un faux en-tête Ethernet aux
 outils de capture [TCPDUMP-LO].
@@ -555,6 +569,7 @@ libpcap avec la précision de la microseconde [PCAP-RS].
 - **[CWE-150]** MITRE, « CWE-150: Improper Neutralization of Escape, Meta, or Control Sequences ». https://cwe.mitre.org/data/definitions/150.html
 - **[OWASP-DEVGUIDE]** OWASP Developer Guide, « Implement Security Logging and Monitoring Checklist ». https://owasp.org/www-project-developer-guide/draft/design/web_app_checklist/security_logging_and_monitoring
 - **[ETHERTYPE]** S. Bortzmeyer, « RFC 7042 : IANA Considerations and IETF Protocol and Documentation Usage for IEEE 802 Parameters ». https://www.bortzmeyer.org/7042.pdf
+- **[HINNANT-DATES]** H. Hinnant, « chrono-Compatible Low-Level Date Algorithms ». https://howardhinnant.github.io/date_algorithms.html
 - **[HARRIS-LO]** G. Harris, « BAD TCP CHECKSUM in loopback interface », wireshark-users, 2008. https://lists.wireshark.org/archives/wireshark-users/200801/msg00031.html
 - **[IANA-TCP]** IANA, « Transmission Control Protocol (TCP) Parameters ». https://www.iana.org/assignments/tcp-parameters
 - **[KERNEL-BPF]** Linux kernel documentation, « Linux Socket Filtering aka Berkeley Packet Filter (BPF) ». https://docs.kernel.org/networking/filter.html
