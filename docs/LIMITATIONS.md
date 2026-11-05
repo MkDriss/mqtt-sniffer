@@ -1,6 +1,6 @@
 # Limitations connues
 
-État de la version 0.4.0. Chaque limitation indique son impact sur ce que le
+État de la version 1.0.0. Chaque limitation indique son impact sur ce que le
 sniffer affiche.
 
 ## Réassemblage TCP
