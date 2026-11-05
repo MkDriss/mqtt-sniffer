@@ -1,7 +1,5 @@
 # mqtt-sniffer
 
-[![CI](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/ci.yml/badge.svg)](https://github.com/TON-UTILISATEUR/mqtt-sniffer/actions/workflows/ci.yml)
-
 Sniffer **défensif** pour MQTT 3.1.1, écrit en Rust : il capture le trafic
 d'un broker, reconstitue les flux TCP et décode chaque message en clair
 (connexions, publications, abonnements, acquittements).
@@ -55,7 +53,7 @@ bibliothèque libpcap avec ses en-têtes.
 sudo dnf install libpcap-devel        # Fedora
 sudo apt install libpcap-dev          # Debian, Ubuntu, Raspberry Pi OS
 
-git clone https://github.com/TON-UTILISATEUR/mqtt-sniffer.git
+git clone https://github.com/MkDriss/mqtt-sniffer.git
 cd mqtt-sniffer
 cargo build --release
 ```
