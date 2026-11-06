@@ -190,11 +190,11 @@ cargo test
 - **Tests unitaires** sur des trames réelles capturées et sur chaque règle de
   détection de la spécification MQTT (toutes les variantes d'erreur sont
   couvertes).
-- **Tests d'intégration** (`tests/replay.rs`) : chaque scénario est écrit dans
-  un vrai fichier pcap, relu par libpcap, puis analysé de bout en bout.
+- **Tests d'intégration** : chaque scénario est écrit dans un vrai fichier
+  pcap, relu par libpcap, puis analysé de bout en bout (`tests/replay.rs`) ;
+  l'enregistrement est vérifié en relisant les fichiers produits
+  (`tests/record.rs`).
 - **Test différentiel** du calcul des checksums contre etherparse.
-- **Tests de mutation** manuels : chaque protection de sécurité a été
-  volontairement désactivée pour vérifier qu'un test échoue.
 
 L'intégration continue (GitHub Actions) lance tous les tests à chaque push.
 

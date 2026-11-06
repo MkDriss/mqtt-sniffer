@@ -456,10 +456,6 @@ imprimables d'une chaîne par une écriture inerte (`\u{1b}`…). Utilisée par
 `show_text` pour neutraliser les chaînes venues du réseau. *(explication
 personnelle, comportement vérifié par test)*
 
-**Test de mutation** — Vérification qu'un test détecte bien un défaut : on
-réintroduit volontairement le défaut et on contrôle que le test échoue.
-*(explication personnelle)*
-
 **Closure** — Fonction anonyme, qu'on peut passer en argument à une autre
 fonction (comme une lambda en Java). `StreamDecoder::feed` reçoit une closure
 qu'il appelle pour chaque événement observé. *(explication personnelle)*
